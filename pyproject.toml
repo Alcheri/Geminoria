@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "limnoria-geminoria"
+version = "1.1.0-beta.1"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Barry Suridge", email = "barry.suridge@gmail.com" }]
+dependencies = ["google-genai"]
+classifiers = [
+    "Environment :: Plugins",
+    "Programming Language :: Python :: 3",
+    "Topic :: Communications :: Chat",
+]
+
+[project.entry-points.'limnoria.plugins']
+Geminoria = "limnoria_geminoria "
+
+[tool.setuptools.package-dir]
+"limnoria_geminoria " = "."
+"limnoria_geminoria .local" = "local/"
+
+[tool.setuptools.package-data]
+"limnoria_geminoria " = ["locales/*.po"]
