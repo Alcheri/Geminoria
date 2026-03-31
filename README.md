@@ -4,6 +4,9 @@
 
 A Gemini-powered agentic search plugin for [Limnoria](https://github.com/progval/Limnoria).
 
+[![Tests](https://github.com/Alcheri/GoogleMaps/actions/workflows/tests.yml/badge.svg)](https://github.com/Alcheri/GoogleMaps/actions/workflows/tests.yml) [![Lint](https://github.com/Alcheri/GoogleMaps/actions/workflows/lint.yml/badge.svg)](https://github.com/Alcheri/GoogleMaps/actions/workflows/lint.yml) [![CodeQL](https://github.com/Alcheri/GoogleMaps/actions/workflows/codeql.yml/badge.svg)](https://github.com/Alcheri/GoogleMaps/security/code-scanning)
+
+
 ## Description
 
 `Geminoria` exposes a single IRC command, `gemini <query>`, backed by Google's
