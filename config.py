@@ -8,10 +8,12 @@ try:
 except Exception:
     _ = lambda x: x
 
+
 def configure(advanced):
     from supybot.questions import expect, anything, something, yn  # noqa: F401
 
     conf.registerPlugin("Geminoria", True)
+
 
 Geminoria = conf.registerPlugin("Geminoria")
 
