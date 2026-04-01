@@ -4,7 +4,7 @@
 
 A Gemini-powered agentic search plugin for [Limnoria](https://github.com/progval/Limnoria).
 
-[![Tests](https://github.com/Alcheri/GoogleMaps/actions/workflows/tests.yml/badge.svg)](https://github.com/Alcheri/GoogleMaps/actions/workflows/tests.yml) [![Lint](https://github.com/Alcheri/GoogleMaps/actions/workflows/lint.yml/badge.svg)](https://github.com/Alcheri/GoogleMaps/actions/workflows/lint.yml) [![CodeQL](https://github.com/Alcheri/GoogleMaps/actions/workflows/codeql.yml/badge.svg)](https://github.com/Alcheri/GoogleMaps/security/code-scanning)
+[![Tests](https://github.com/Alcheri/Geminoria/actions/workflows/tests.yml/badge.svg)](https://github.com/Alcheri/Geminoria/actions/workflows/tests.yml) [![Lint](https://github.com/Alcheri/Geminoria/actions/workflows/lint.yml/badge.svg)](https://github.com/Alcheri/Geminoria/actions/workflows/lint.yml) [![CodeQL](https://github.com/Alcheri/Geminoria/actions/workflows/codeql.yml/badge.svg)](https://github.com/Alcheri/Geminoria/security/code-scanning)
 
 ## Description
 
@@ -22,7 +22,7 @@ capabilities and can call any combination of them to answer a user's question:
 ## Requirements
 
 ```
-google-genai
+google-genai==1.50.1
 ```
 
 Install with:
@@ -30,6 +30,9 @@ Install with:
 ```bash
 pip install -r requirements.txt
 ```
+
+The plugin currently pins `google-genai==1.50.1`, which is the known-good
+version for the Python 3.11 Limnoria environments used by Puss and Borg.
 
 ## API Key And Model
 
