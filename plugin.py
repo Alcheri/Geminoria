@@ -351,14 +351,41 @@ class Geminoria(callbacks.Plugin):
         except Exception as exc:
             log.warning("Geminoria: unable to save todo database: %s", exc)
 
-    def _todo_scope(self, irc, msg) -> str:
-        target = msg.args[0] if msg.args else ""
+    def _todo_scope(self, irc, msg, target: Optional[str] = None) -> str:
+        if target is None:
+            target = msg.args[0] if msg.args else ""
         if target and irc.isChannel(target):
             return f"channel:{target}"
+        account = getattr(msg, "tagged", lambda tag: None)("account")
+        if account:
+            return f"account:{str(account).lower()}"
         return f"private:{msg.nick.lower()}"
 
-    def _todo_items(self, irc, msg) -> list[dict[str, str]]:
-        return self._todo_db.setdefault(self._todo_scope(irc, msg), [])
+    def _todo_items(
+        self, irc, msg, target: Optional[str] = None
+    ) -> list[dict[str, str]]:
+        return self._todo_db.setdefault(self._todo_scope(irc, msg, target), [])
+
+    def _todo_context(
+        self, irc, msg, text: str = ""
+    ) -> tuple[list[dict[str, str]], str]:
+        raw = (text or "").strip()
+        default_target = msg.args[0] if msg.args else ""
+
+        if not raw:
+            return self._todo_items(irc, msg, default_target), raw
+
+        first, _, remainder = raw.partition(" ")
+        if irc.isChannel(first):
+            return self._todo_items(irc, msg, first), remainder.strip()
+
+        if remainder:
+            maybe_target, sep, tail = remainder.partition(" ")
+            if irc.isChannel(maybe_target):
+                normalized = first if not sep else f"{first} {tail.strip()}".strip()
+                return self._todo_items(irc, msg, maybe_target), normalized
+
+        return self._todo_items(irc, msg, default_target), raw
 
     def _format_todo_list(self, items: list[dict[str, str]]) -> str:
         rendered = []
@@ -376,8 +403,7 @@ class Geminoria(callbacks.Plugin):
         return index - 1
 
     def _handle_todo(self, irc, msg, text: str = "") -> None:
-        raw = (text or "").strip()
-        items = self._todo_items(irc, msg)
+        items, raw = self._todo_context(irc, msg, text)
 
         if not raw or raw.lower() == "list":
             if not items:
@@ -838,14 +864,16 @@ class Geminoria(callbacks.Plugin):
     gemini = wrap(gemini, ["text"])
 
     def todo(self, irc, msg, args, text: str = "") -> None:
-        """[list | add <item> | done <number> | remove <number> | clear]
+        """[[#channel] | list [#channel] | add [#channel] <item> | done [#channel] <number> | remove [#channel] <number> | clear [#channel]]
 
         Manage a simple shared to-do list for the current channel. In private
-        messages, the list is scoped to your nick.
+        messages, the list is scoped to your nick unless you provide a channel.
 
         Examples:
         todo
+        todo #channel
         todo add check Gemini model options
+        todo add #channel check Gemini model options
         todo done 1
         todo remove 2
         todo clear

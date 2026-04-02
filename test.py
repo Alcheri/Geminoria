@@ -30,10 +30,14 @@ class FakeIrc:
 
 
 class FakeMsg:
-    def __init__(self, channel="#test", nick="test"):
+    def __init__(self, channel="#test", nick="test", tags=None):
         self.args = [channel]
         self.nick = nick
         self.prefix = f"{nick}!user@host.invalid"
+        self._tags = tags or {}
+
+    def tagged(self, tag):
+        return self._tags.get(tag)
 
 
 class GeminoriaTodoTestCase(unittest.TestCase):
@@ -99,6 +103,44 @@ class GeminoriaTodoTestCase(unittest.TestCase):
 
         self.subject._handle_todo(self.irc, private_msg, "list")
         self.assertEqual(self.irc.replies[-1], "To-do: 1. private task (alice)")
+
+    def test_private_messages_use_account_tag_when_available(self):
+        first_request = FakeMsg(
+            channel="Geminoria",
+            nick="LocalControl11",
+            tags={"account": "owner"},
+        )
+        second_request = FakeMsg(
+            channel="Geminoria",
+            nick="LocalControl12",
+            tags={"account": "owner"},
+        )
+
+        self.subject._handle_todo(
+            self.irc, first_request, "add check Gemini rate limits"
+        )
+        self.subject._handle_todo(self.irc, second_request, "list")
+
+        self.assertEqual(
+            self.irc.replies[-1],
+            "To-do: 1. check Gemini rate limits (LocalControl11)",
+        )
+
+    def test_private_messages_can_list_channel_scope_explicitly(self):
+        private_msg = FakeMsg(channel="Geminoria", nick="alice")
+
+        self.subject._handle_todo(self.irc, self.msg, "add channel task")
+        self.subject._handle_todo(self.irc, private_msg, "#test")
+
+        self.assertEqual(self.irc.replies[-1], "To-do: 1. channel task (test)")
+
+    def test_private_messages_can_add_to_channel_scope_explicitly(self):
+        private_msg = FakeMsg(channel="Geminoria", nick="alice")
+
+        self.subject._handle_todo(self.irc, private_msg, "add #test from botctl")
+        self.subject._handle_todo(self.irc, self.msg, "list")
+
+        self.assertEqual(self.irc.replies[-1], "To-do: 1. from botctl (alice)")
 
     def test_todo_persists_to_json_file(self):
         self.subject._handle_todo(self.irc, self.msg, "add persist me")

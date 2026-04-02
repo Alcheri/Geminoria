@@ -90,7 +90,7 @@ or `''` (everyone) to adjust the access level.
 ## To-do List
 
 The `todo` command stores a shared list per channel. In private messages it uses
-your nick as the scope instead.
+your nick as the scope instead, unless you pass a channel name explicitly.
 
 ```text
 <you> @todo add check Gemini rate limits
@@ -101,10 +101,14 @@ your nick as the scope instead.
 
 <you> @todo done 1
 <Borg> Completed to-do #1: check Gemini rate limits
+
+<you> @msg Borg todo #channel
+<Borg> To-do: 1. check Gemini rate limits (yourNick)
 ```
 
 Supported actions are `list`, `add <item>`, `done <number>`, `remove <number>`,
-and `clear`.
+and `clear`. From private messages or `botctl`, you can target a channel with
+forms like `todo #channel`, `todo add #channel <item>`, and `todo done #channel 1`.
 
 ## Licence
 
