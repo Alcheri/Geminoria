@@ -21,6 +21,7 @@
 ###
 
 # Standard library
+import json
 import re
 from collections import deque
 from typing import Any, Dict, Optional
@@ -37,8 +38,9 @@ import supybot.conf as conf
 import supybot.ircdb as ircdb
 import supybot.ircutils as ircutils
 import supybot.log as log
+import supybot.world as world
 from supybot import callbacks
-from supybot.commands import wrap
+from supybot.commands import additional, wrap
 
 try:
     from supybot.i18n import PluginInternationalization
@@ -60,6 +62,7 @@ _CFG_KEY_RE = re.compile(r"\bsupybot(?:\.[A-Za-z0-9_-]+)+\b")
 
 _client: Optional[genai.Client] = None
 _client_api_key: Optional[str] = None
+_TODO_FILENAME = conf.supybot.directories.data.dirize("Geminoria.todo.json")
 _SYSTEM_INSTRUCTION = (
     "You answer questions about a Limnoria bot using tool results. "
     "When the question is about configuration, prefer exact full config variable "
@@ -254,6 +257,11 @@ def _highlight_config_keys(text: str) -> str:
     return _CFG_KEY_RE.sub(repl, text)
 
 
+def _normalize_todo_text(text: str) -> str:
+    """Collapse whitespace for stable one-line IRC todo items."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
 # ---------------------------------------------------------------------------
 # Config-registry walker (for search_config tool)
 # ---------------------------------------------------------------------------
@@ -311,7 +319,118 @@ class Geminoria(callbacks.Plugin):
         self._msg_buf: Dict[str, deque] = {}
         # Per-channel URL buffers: channel -> deque of (nick, url)
         self._url_buf: Dict[str, deque] = {}
+        self._todo_db: Dict[str, list[dict[str, str]]] = {}
+        self._load_todo_db()
+        world.flushers.append(self._flush_todo_db)
         log.debug("Geminoria: plugin initialised.")
+
+    def die(self):
+        self._flush_todo_db()
+        if self._flush_todo_db in world.flushers:
+            world.flushers.remove(self._flush_todo_db)
+        self.__parent.die()
+
+    def _load_todo_db(self) -> None:
+        try:
+            with open(_TODO_FILENAME, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+                self._todo_db = payload if isinstance(payload, dict) else {}
+        except FileNotFoundError:
+            self._todo_db = {}
+        except json.JSONDecodeError as exc:
+            log.warning("Geminoria: unable to parse todo database: %s", exc)
+            self._todo_db = {}
+        except Exception as exc:
+            log.warning("Geminoria: unable to load todo database: %s", exc)
+            self._todo_db = {}
+
+    def _flush_todo_db(self) -> None:
+        try:
+            with open(_TODO_FILENAME, "w", encoding="utf-8") as handle:
+                json.dump(self._todo_db, handle, indent=2, sort_keys=True)
+        except Exception as exc:
+            log.warning("Geminoria: unable to save todo database: %s", exc)
+
+    def _todo_scope(self, irc, msg) -> str:
+        target = msg.args[0] if msg.args else ""
+        if target and irc.isChannel(target):
+            return f"channel:{target}"
+        return f"private:{msg.nick.lower()}"
+
+    def _todo_items(self, irc, msg) -> list[dict[str, str]]:
+        return self._todo_db.setdefault(self._todo_scope(irc, msg), [])
+
+    def _format_todo_list(self, items: list[dict[str, str]]) -> str:
+        rendered = []
+        for index, item in enumerate(items, start=1):
+            rendered.append(f"{index}. {item['text']} ({item['added_by']})")
+        return "To-do: " + " | ".join(rendered)
+
+    def _parse_todo_index(self, token: str, count: int) -> Optional[int]:
+        try:
+            index = int(token)
+        except (TypeError, ValueError):
+            return None
+        if index < 1 or index > count:
+            return None
+        return index - 1
+
+    def _handle_todo(self, irc, msg, text: str = "") -> None:
+        raw = (text or "").strip()
+        items = self._todo_items(irc, msg)
+
+        if not raw or raw.lower() == "list":
+            if not items:
+                irc.reply("To-do list is empty.", prefixNick=False)
+                return
+            irc.reply(self._format_todo_list(items), prefixNick=False)
+            return
+
+        action, _, remainder = raw.partition(" ")
+        action = action.lower()
+        remainder = remainder.strip()
+
+        if action == "add":
+            item_text = _normalize_todo_text(remainder)
+            if not item_text:
+                irc.error("Provide the to-do item text.", prefixNick=False)
+                return
+            items.append({"text": item_text, "added_by": msg.nick})
+            self._flush_todo_db()
+            irc.reply(
+                f"Added to to-do list as #{len(items)}: {item_text}",
+                prefixNick=False,
+            )
+            return
+
+        if action in ("done", "remove"):
+            index = self._parse_todo_index(remainder, len(items))
+            if index is None:
+                irc.error("Provide a valid to-do item number.", prefixNick=False)
+                return
+            item = items.pop(index)
+            self._flush_todo_db()
+            verb = "Completed" if action == "done" else "Removed"
+            irc.reply(
+                f"{verb} to-do #{index + 1}: {item['text']}",
+                prefixNick=False,
+            )
+            return
+
+        if action == "clear":
+            count = len(items)
+            if not count:
+                irc.reply("To-do list is already empty.", prefixNick=False)
+                return
+            items[:] = []
+            self._flush_todo_db()
+            irc.reply(f"Cleared {count} to-do item(s).", prefixNick=False)
+            return
+
+        irc.error(
+            "Unknown todo action. Use list, add, done, remove, or clear.",
+            prefixNick=False,
+        )
 
     # ------------------------------------------------------------------
     # Passive listeners – populate message & URL buffers
@@ -717,6 +836,29 @@ class Geminoria(callbacks.Plugin):
         irc.reply(answer, prefixNick=False)
 
     gemini = wrap(gemini, ["text"])
+
+    def todo(self, irc, msg, args, text: str = "") -> None:
+        """[list | add <item> | done <number> | remove <number> | clear]
+
+        Manage a simple shared to-do list for the current channel. In private
+        messages, the list is scoped to your nick.
+
+        Examples:
+        todo
+        todo add check Gemini model options
+        todo done 1
+        todo remove 2
+        todo clear
+
+        Requires the Geminoria capability (or as configured).
+        """
+        if not self._check_capability(irc, msg):
+            cap = _get_cfg()["required_cap"]
+            irc.errorNoCapability(cap, prefixNick=False)
+            return
+        self._handle_todo(irc, msg, text)
+
+    todo = wrap(todo, [additional("text")])
 
 
 Class = Geminoria

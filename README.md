@@ -19,6 +19,9 @@ capabilities and can call any combination of them to answer a user's question:
 | `search_last` | `@last --with <text>` |
 | `search_urls` | `@url search <word>` |
 
+The plugin also provides a small persistent `todo` list for lightweight channel
+tracking.
+
 ## Requirements
 
 ```
@@ -83,6 +86,25 @@ or `''` (everyone) to adjust the access level.
 <you> @gemini what config options control flood protection?
 <Borg> supybot.abuse.flood.command  supybot.abuse.flood.command.maximum ...
 ```
+
+## To-do List
+
+The `todo` command stores a shared list per channel. In private messages it uses
+your nick as the scope instead.
+
+```text
+<you> @todo add check Gemini rate limits
+<Borg> Added to to-do list as #1: check Gemini rate limits
+
+<you> @todo
+<Borg> To-do: 1. check Gemini rate limits (yourNick)
+
+<you> @todo done 1
+<Borg> Completed to-do #1: check Gemini rate limits
+```
+
+Supported actions are `list`, `add <item>`, `done <number>`, `remove <number>`,
+and `clear`.
 
 ## Licence
 
