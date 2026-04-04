@@ -22,7 +22,6 @@ Thumbs.db
 *.bak
 *.Identifier
 
-# Logs and data files
+# Logs and diagram sources
 *.mmd
-*.json
 *.log
