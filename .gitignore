@@ -2,6 +2,8 @@
 __pycache__/
 local/__pycache__/
 *.py[cod]
+.pytest_cache/
+CACHEDIR.TAG
 
 # Virtual environments
 .venv/
@@ -19,3 +21,8 @@ Thumbs.db
 # Backup files
 *.bak
 *.Identifier
+
+# Logs and data files
+*.mmd
+*.json
+*.log
