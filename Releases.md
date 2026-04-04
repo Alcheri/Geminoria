@@ -1,3 +1,9 @@
+## 2026-04-04 - Published Build Update
+
+- Removed the `todo` command and all related storage/handler code from the GitHub-published Geminoria plugin.
+- Removed `todo` documentation from README.
+- Removed `todo`-specific tests from the test suite.
+
 ## **_Agentic Gemini‑powered search for [Limnoria](https://github.com/progval/Limnoria) — Beta Release_**
 
 This beta introduces a major architectural upgrade to Geminoria, shifting from environment‑based configuration to a fully **Limnoria‑native**, **config‑driven**, **agentic design**. It is feature‑complete for the 1.1 series and ready for wider testing.
