@@ -9,6 +9,8 @@ on:
 
 jobs:
   test:
+  #  The job name is used in the test summary, so we include the Python version for clarity.
+    name: "tests (py${{ matrix.python-version }})"
     runs-on: ubuntu-latest
     strategy:
       matrix:
