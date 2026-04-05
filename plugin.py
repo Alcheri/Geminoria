@@ -22,6 +22,8 @@
 
 # Standard library
 import re
+import threading
+import time
 from collections import deque
 from typing import Any, Dict, Optional
 
@@ -52,6 +54,12 @@ except ImportError:
 # ---------------------------------------------------------------------------
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _CFG_KEY_RE = re.compile(r"\bsupybot(?:\.[A-Za-z0-9_-]+)+\b")
+_IRC_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+_SECRET_PATTERNS = [
+    re.compile(r"(?i)\b(api[_-]?key|token|secret|password|passwd|bearer)\b\s*[:=]\s*\S+"),
+    re.compile(r"(?i)\b(authorization)\s*:\s*bearer\s+\S+"),
+    re.compile(r"\bAIza[0-9A-Za-z\-_]{20,}\b"),  # common Google API key prefix
+]
 
 # ---------------------------------------------------------------------------
 # Gemini client cache
@@ -75,6 +83,49 @@ def _summarize_for_log(text: str, limit: int = 120) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: limit - 3] + "..."
+
+
+def _redact_sensitive(text: str) -> str:
+    """Redact obvious secret/token-like text before external or log use."""
+    if not text:
+        return ""
+    redacted = text
+    for pattern in _SECRET_PATTERNS:
+        redacted = pattern.sub("[REDACTED]", redacted)
+    return redacted
+
+
+def _loggable_text(text: str, cfg: Dict[str, Any], limit: int = 120) -> str:
+    """Return text suitable for debug logs based on configured sensitivity."""
+    if cfg.get("log_sensitive", False):
+        return _summarize_for_log(text, limit=limit)
+    return f"<redacted len={len(text or '')}>"
+
+
+def _loggable_args(args: Dict[str, Any], cfg: Dict[str, Any]) -> Any:
+    """Return tool args suitable for logs without leaking payloads by default."""
+    if cfg.get("log_sensitive", False):
+        return args
+    return {"keys": sorted(args.keys())}
+
+
+def _truncate(text: str, limit: int) -> str:
+    if limit <= 0 or len(text) <= limit:
+        return text
+    if limit <= 3:
+        return text[:limit]
+    return text[: limit - 3] + "..."
+
+
+def _sanitize_irc_text(text: str) -> str:
+    """Remove IRC control chars from untrusted output."""
+    if not text:
+        return ""
+    return _IRC_CTRL_RE.sub("", text)
+
+
+def _normalized_channel_set(values: Any) -> set[str]:
+    return {str(v).lower() for v in (values or []) if v}
 
 
 def _build_client(api_key: str) -> Optional[genai.Client]:
@@ -121,6 +172,14 @@ def _get_cfg() -> Dict[str, Any]:
         "buffer_size": 50,
         "max_rounds": 3,
         "disable_ansi": False,
+        "redact_sensitive": True,
+        "log_sensitive": False,
+        "cooldown_seconds": 10,
+        "max_concurrent_per_channel": 1,
+        "max_reply_chars": 350,
+        "history_tools_channel_allowlist": [],
+        "search_last_channel_allowlist": [],
+        "search_urls_channel_allowlist": [],
     }
     try:
         plugins = getattr(conf.supybot, "plugins", None)
@@ -135,6 +194,14 @@ def _get_cfg() -> Dict[str, Any]:
             "buffer_size": int(p.bufferSize()),
             "max_rounds": int(p.maxToolRounds()),
             "disable_ansi": bool(p.disableANSI()),
+            "redact_sensitive": bool(p.redactSensitiveData()),
+            "log_sensitive": bool(p.logSensitiveData()),
+            "cooldown_seconds": int(p.cooldownSeconds()),
+            "max_concurrent_per_channel": int(p.maxConcurrentPerChannel()),
+            "max_reply_chars": int(p.maxReplyChars()),
+            "history_tools_channel_allowlist": list(p.historyToolsChannelAllowlist()),
+            "search_last_channel_allowlist": list(p.searchLastChannelAllowlist()),
+            "search_urls_channel_allowlist": list(p.searchUrlsChannelAllowlist()),
         }
     except Exception:
         return defaults
@@ -145,46 +212,49 @@ def _get_cfg() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _make_tools(cfg: Dict[str, Any]) -> gtypes.Tool:
+def _make_tools(cfg: Dict[str, Any], *, allow_search_last: bool, allow_search_urls: bool) -> gtypes.Tool:
     n = cfg["max_results"]
-    return _tool(
-        function_declarations=[
-            gtypes.FunctionDeclaration(
-                name="search_config",
-                description=(
-                    f"Search Limnoria's configuration registry for variables "
-                    f"whose name contains the given keyword. Returns up to {n} exact "
-                    f"full config variable names. When answering config questions, "
-                    f"cite these exact keys verbatim."
-                ),
-                parameters=_schema(
-                    type=gtypes.Type.OBJECT,
-                    properties={
-                        "word": _schema(
-                            type=gtypes.Type.STRING,
-                            description="Keyword to search for in config variable names.",
-                        )
-                    },
-                    required=["word"],
-                ),
+    declarations = [
+        gtypes.FunctionDeclaration(
+            name="search_config",
+            description=(
+                f"Search Limnoria's configuration registry for variables "
+                f"whose name contains the given keyword. Returns up to {n} exact "
+                f"full config variable names. When answering config questions, "
+                f"cite these exact keys verbatim."
             ),
-            gtypes.FunctionDeclaration(
-                name="search_commands",
-                description=(
-                    f"Search all loaded Limnoria plugin commands by name (like @apropos). "
-                    f"Returns up to {n} matching commands in 'Plugin.command' format."
-                ),
-                parameters=_schema(
-                    type=gtypes.Type.OBJECT,
-                    properties={
-                        "word": _schema(
-                            type=gtypes.Type.STRING,
-                            description="Keyword to search for in command names.",
-                        )
-                    },
-                    required=["word"],
-                ),
+            parameters=_schema(
+                type=gtypes.Type.OBJECT,
+                properties={
+                    "word": _schema(
+                        type=gtypes.Type.STRING,
+                        description="Keyword to search for in config variable names.",
+                    )
+                },
+                required=["word"],
             ),
+        ),
+        gtypes.FunctionDeclaration(
+            name="search_commands",
+            description=(
+                f"Search all loaded Limnoria plugin commands by name (like @apropos). "
+                f"Returns up to {n} matching commands in 'Plugin.command' format."
+            ),
+            parameters=_schema(
+                type=gtypes.Type.OBJECT,
+                properties={
+                    "word": _schema(
+                        type=gtypes.Type.STRING,
+                        description="Keyword to search for in command names.",
+                    )
+                },
+                required=["word"],
+            ),
+        ),
+    ]
+
+    if allow_search_last:
+        declarations.append(
             gtypes.FunctionDeclaration(
                 name="search_last",
                 description=(
@@ -201,7 +271,11 @@ def _make_tools(cfg: Dict[str, Any]) -> gtypes.Tool:
                     },
                     required=["text"],
                 ),
-            ),
+            )
+        )
+
+    if allow_search_urls:
+        declarations.append(
             gtypes.FunctionDeclaration(
                 name="search_urls",
                 description=(
@@ -218,9 +292,10 @@ def _make_tools(cfg: Dict[str, Any]) -> gtypes.Tool:
                     },
                     required=["word"],
                 ),
-            ),
-        ]
-    )
+            )
+        )
+
+    return _tool(function_declarations=declarations)
 
 
 # ---------------------------------------------------------------------------
@@ -297,9 +372,11 @@ class Geminoria(callbacks.Plugin):
     * **search_urls** – searches recently posted channel URLs
       (equivalent to ``@url search <word>``)
 
-    Access is controlled by Limnoria's Capabilities system.  Grant users the
-    ``Geminoria`` capability (or change ``requiredCapability`` in the
-    config) to allow them to use the command.
+    Access is controlled by Limnoria's Capabilities system and follows its
+    normal default behavior.  In a default-allow setup, users may use the
+    command unless a matching anti-capability is configured.  You can still
+    use ``requiredCapability`` for explicit policy (for example ``admin`` or
+    ``owner``).
     """
 
     threaded = True
@@ -311,6 +388,11 @@ class Geminoria(callbacks.Plugin):
         self._msg_buf: Dict[str, deque] = {}
         # Per-channel URL buffers: channel -> deque of (nick, url)
         self._url_buf: Dict[str, deque] = {}
+        # Per-prefix request cooldown tracking
+        self._last_request_ts: Dict[str, float] = {}
+        # Per-channel in-flight request counts
+        self._inflight_by_channel: Dict[str, int] = {}
+        self._state_lock = threading.Lock()
         log.debug("Geminoria: plugin initialised.")
 
     # ------------------------------------------------------------------
@@ -447,6 +529,69 @@ class Geminoria(callbacks.Plugin):
         except Exception:
             return False
 
+    def _acquire_request_slot(self, msg, cfg: Dict[str, Any]) -> Optional[str]:
+        """Reserve capacity for a request or return an error string."""
+        prefix = msg.prefix
+        channel = (
+            msg.args[0]
+            if msg.args and msg.args[0] and msg.args[0][0] in "#&+!"
+            else None
+        )
+        cooldown = max(0, int(cfg["cooldown_seconds"]))
+        per_channel_limit = max(1, int(cfg["max_concurrent_per_channel"]))
+        now = time.monotonic()
+        with self._state_lock:
+            last = self._last_request_ts.get(prefix, 0.0)
+            if cooldown > 0 and (now - last) < cooldown:
+                remaining = max(1, int(cooldown - (now - last)))
+                return f"Please wait {remaining}s before using gemini again."
+            if channel:
+                inflight = self._inflight_by_channel.get(channel, 0)
+                if inflight >= per_channel_limit:
+                    return "Geminoria is busy in this channel. Please try again shortly."
+                self._inflight_by_channel[channel] = inflight + 1
+            self._last_request_ts[prefix] = now
+        return None
+
+    def _release_request_slot(self, msg) -> None:
+        channel = (
+            msg.args[0]
+            if msg.args and msg.args[0] and msg.args[0][0] in "#&+!"
+            else None
+        )
+        if not channel:
+            return
+        with self._state_lock:
+            inflight = self._inflight_by_channel.get(channel, 0)
+            if inflight <= 1:
+                self._inflight_by_channel.pop(channel, None)
+            else:
+                self._inflight_by_channel[channel] = inflight - 1
+
+    def _tool_enabled(
+        self, tool_name: str, channel: Optional[str], irc, cfg: Dict[str, Any]
+    ) -> bool:
+        """Check whether a channel-scoped tool policy allows the tool."""
+        if tool_name in ("search_last", "search_urls"):
+            if not channel:
+                return False
+            general_allowlist = _normalized_channel_set(
+                cfg.get("history_tools_channel_allowlist")
+            )
+            specific_allowlist = (
+                _normalized_channel_set(cfg.get("search_last_channel_allowlist"))
+                if tool_name == "search_last"
+                else _normalized_channel_set(cfg.get("search_urls_channel_allowlist"))
+            )
+            effective_allowlist = specific_allowlist or general_allowlist
+            if effective_allowlist and channel.lower() not in effective_allowlist:
+                return False
+        if tool_name == "search_last":
+            return bool(self.registryValue("allowSearchLast", channel, irc.network))
+        if tool_name == "search_urls":
+            return bool(self.registryValue("allowSearchUrls", channel, irc.network))
+        return True
+
     # ------------------------------------------------------------------
     # Agentic loop
     # ------------------------------------------------------------------
@@ -470,17 +615,27 @@ class Geminoria(callbacks.Plugin):
         limit = cfg["max_results"]
         max_rounds = cfg["max_rounds"]
         channel = msg.args[0] if irc.isChannel(msg.args[0]) else None
+        redact_sensitive = cfg["redact_sensitive"]
+        query_for_model = _redact_sensitive(query) if redact_sensitive else query
+        allow_search_last = self._tool_enabled("search_last", channel, irc, cfg)
+        allow_search_urls = self._tool_enabled("search_urls", channel, irc, cfg)
 
         log.debug(
-            "Geminoria: starting query model=%s channel=%s rounds=%s limit=%s query=%r",
+            "Geminoria: starting query model=%s channel=%s rounds=%s limit=%s allow_last=%s allow_urls=%s query=%r",
             model,
             channel or "<private>",
             max_rounds,
             limit,
-            _summarize_for_log(query),
+            allow_search_last,
+            allow_search_urls,
+            _loggable_text(query, cfg),
         )
 
-        tool = _make_tools(cfg)
+        tool = _make_tools(
+            cfg,
+            allow_search_last=allow_search_last,
+            allow_search_urls=allow_search_urls,
+        )
         tool_cfg = _gen_config(
             tools=[tool],
             systemInstruction=_SYSTEM_INSTRUCTION,
@@ -490,7 +645,7 @@ class Geminoria(callbacks.Plugin):
         contents = [
             gtypes.Content(
                 role="user",
-                parts=[gtypes.Part(text=query)],
+                parts=[gtypes.Part(text=query_for_model)],
             )
         ]
         collected_tool_results = []
@@ -551,7 +706,7 @@ class Geminoria(callbacks.Plugin):
                 log.debug(
                     "Geminoria: returning text response round=%s text=%r",
                     round_number,
-                    _summarize_for_log(text),
+                    _loggable_text(text, cfg),
                 )
                 return _clean_output(text)
 
@@ -567,7 +722,7 @@ class Geminoria(callbacks.Plugin):
                     "Geminoria: executing tool round=%s name=%s args=%s",
                     round_number,
                     fn,
-                    tool_args,
+                    _loggable_args(tool_args, cfg),
                 )
 
                 if fn == "search_config":
@@ -577,19 +732,19 @@ class Geminoria(callbacks.Plugin):
                         irc, tool_args.get("word", ""), limit
                     )
                 elif fn == "search_last":
-                    if channel:
+                    if allow_search_last and channel:
                         result = self._tool_search_last(
                             channel, tool_args.get("text", ""), limit
                         )
                     else:
-                        result = "search_last is only available in a channel."
+                        result = "search_last is disabled for this context."
                 elif fn == "search_urls":
-                    if channel:
+                    if allow_search_urls and channel:
                         result = self._tool_search_urls(
                             channel, tool_args.get("word", ""), limit
                         )
                     else:
-                        result = "search_urls is only available in a channel."
+                        result = "search_urls is disabled for this context."
                 else:
                     result = f"Unknown tool: {fn}"
 
@@ -597,15 +752,16 @@ class Geminoria(callbacks.Plugin):
                     "Geminoria: tool result round=%s name=%s result=%r",
                     round_number,
                     fn,
-                    _summarize_for_log(result),
+                    _loggable_text(result, cfg),
                 )
-                collected_tool_results.append(f"{fn}: {result}")
+                result_for_model = _redact_sensitive(result) if redact_sensitive else result
+                collected_tool_results.append(f"{fn}: {result_for_model}")
 
                 response_parts.append(
                     gtypes.Part(
                         function_response=gtypes.FunctionResponse(
                             name=fn,
-                            response={"result": result},
+                            response={"result": result_for_model},
                         )
                     )
                 )
@@ -657,7 +813,7 @@ class Geminoria(callbacks.Plugin):
             )
             log.debug(
                 "Geminoria: tool-call limit reached final text=%r",
-                _summarize_for_log(text),
+                _loggable_text(text, cfg),
             )
             if text:
                 return _clean_output(text)
@@ -691,28 +847,42 @@ class Geminoria(callbacks.Plugin):
         configuration variables, loaded commands, recent channel messages,
         and recently posted URLs to construct its answer.
 
-        Requires the Geminoria capability (or as configured).
+        Access checks follow Limnoria's standard capability behavior for
+        requiredCapability (including default-allow unless anti-capabilities
+        are configured).
         """
+        cfg = _get_cfg()
         log.debug(
             "Geminoria: command invoked prefix=%s channel=%s query=%r",
             msg.prefix,
             msg.args[0] if msg.args else "<unknown>",
-            _summarize_for_log(query),
+            _loggable_text(query, cfg),
         )
         if not self._check_capability(irc, msg):
-            cap = _get_cfg()["required_cap"]
+            cap = cfg["required_cap"]
             irc.errorNoCapability(cap, prefixNick=False)
             return
 
-        answer = self._run_gemini(irc, msg, query)
+        slot_error = self._acquire_request_slot(msg, cfg)
+        if slot_error:
+            irc.reply(slot_error, prefixNick=False)
+            return
 
-        cfg = _get_cfg()
+        try:
+            answer = self._run_gemini(irc, msg, query)
+        finally:
+            self._release_request_slot(msg)
+
+        answer = _sanitize_irc_text(answer)
+
         if cfg["disable_ansi"]:
             answer = ircutils.stripFormatting(answer)
         else:
             answer = _highlight_config_keys(answer)
 
-        log.debug("Geminoria: replying text=%r", _summarize_for_log(answer))
+        answer = _truncate(answer, max(1, int(cfg["max_reply_chars"])))
+
+        log.debug("Geminoria: replying text=%r", _loggable_text(answer, cfg))
 
         irc.reply(answer, prefixNick=False)
 
