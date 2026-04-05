@@ -56,7 +56,9 @@ _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _CFG_KEY_RE = re.compile(r"\bsupybot(?:\.[A-Za-z0-9_-]+)+\b")
 _IRC_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 _SECRET_PATTERNS = [
-    re.compile(r"(?i)\b(api[_-]?key|token|secret|password|passwd|bearer)\b\s*[:=]\s*\S+"),
+    re.compile(
+        r"(?i)\b(api[_-]?key|token|secret|password|passwd|bearer)\b\s*[:=]\s*\S+"
+    ),
     re.compile(r"(?i)\b(authorization)\s*:\s*bearer\s+\S+"),
     re.compile(r"\bAIza[0-9A-Za-z\-_]{20,}\b"),  # common Google API key prefix
 ]
@@ -212,7 +214,9 @@ def _get_cfg() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _make_tools(cfg: Dict[str, Any], *, allow_search_last: bool, allow_search_urls: bool) -> gtypes.Tool:
+def _make_tools(
+    cfg: Dict[str, Any], *, allow_search_last: bool, allow_search_urls: bool
+) -> gtypes.Tool:
     n = cfg["max_results"]
     declarations = [
         gtypes.FunctionDeclaration(
@@ -548,7 +552,9 @@ class Geminoria(callbacks.Plugin):
             if channel:
                 inflight = self._inflight_by_channel.get(channel, 0)
                 if inflight >= per_channel_limit:
-                    return "Geminoria is busy in this channel. Please try again shortly."
+                    return (
+                        "Geminoria is busy in this channel. Please try again shortly."
+                    )
                 self._inflight_by_channel[channel] = inflight + 1
             self._last_request_ts[prefix] = now
         return None
@@ -754,7 +760,9 @@ class Geminoria(callbacks.Plugin):
                     fn,
                     _loggable_text(result, cfg),
                 )
-                result_for_model = _redact_sensitive(result) if redact_sensitive else result
+                result_for_model = (
+                    _redact_sensitive(result) if redact_sensitive else result
+                )
                 collected_tool_results.append(f"{fn}: {result_for_model}")
 
                 response_parts.append(
