@@ -231,7 +231,7 @@ def _get_cfg() -> Dict[str, Any]:
         "search_last_channel_allowlist": [],
         "search_urls_channel_allowlist": [],
         "cache_enabled": True,
-        "cache_ttl_seconds": 86400,
+        "cache_ttl_seconds": 172800,
         "cache_max_entries": 2000,
         "cache_min_query_length": 8,
         "cache_allow_fuzzy": True,
