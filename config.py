@@ -199,4 +199,71 @@ conf.registerChannelValue(
     ),
 )
 
+conf.registerGlobalValue(
+    Geminoria,
+    "cacheEnabled",
+    registry.Boolean(
+        True,
+        _("Enable SQLite query history cache for repeated Geminoria requests."),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "cacheTtlSeconds",
+    registry.Integer(
+        86400,
+        _("How long cached responses remain valid (in seconds)."),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "cacheMaxEntries",
+    registry.Integer(
+        2000,
+        _("Maximum number of cached query/response entries to retain."),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "cacheMinQueryLength",
+    registry.Integer(
+        8,
+        _("Minimum query length required before Geminoria caches a request."),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "cacheAllowFuzzy",
+    registry.Boolean(
+        True,
+        _(
+            "Allow fuzzy cache matching for similar queries within the same context."
+        ),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "cacheFuzzyMinScore",
+    registry.Integer(
+        92,
+        _(
+            "Minimum token-overlap score (0-100) for fuzzy cache hits. Higher is safer."
+        ),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "cachePrefixHits",
+    registry.Boolean(
+        True,
+        _("Prefix cache-hit replies with [cached] for operator visibility."),
+    ),
+)
+
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

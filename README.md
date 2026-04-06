@@ -90,6 +90,13 @@ or set `requiredCapability` to `admin` / `owner`.
 | `searchUrlsChannelAllowlist` | `''` (empty) | Space-separated channels allowed for `search_urls`; if set, overrides shared history allowlist for this tool |
 | `allowSearchLast` (channel) | `True` | Allow `search_last` in a given channel |
 | `allowSearchUrls` (channel) | `True` | Allow `search_urls` in a given channel |
+| `cacheEnabled` | `True` | Enable persistent SQLite query-history cache |
+| `cacheTtlSeconds` | `172800` | Cache entry lifetime in seconds |
+| `cacheMaxEntries` | `2000` | Max cache rows retained before pruning oldest |
+| `cacheMinQueryLength` | `8` | Minimum query length required for cache lookup/store |
+| `cacheAllowFuzzy` | `True` | Allow fuzzy lookup for similar queries in same context |
+| `cacheFuzzyMinScore` | `92` | Minimum fuzzy similarity score (0-100) |
+| `cachePrefixHits` | `True` | Prefix cache-hit replies with `[cached]` |
 
 Channel policy examples:
 
@@ -97,15 +104,28 @@ Channel policy examples:
 @config plugins.Geminoria.historyToolsChannelAllowlist #ops #support
 @config plugins.Geminoria.searchLastChannelAllowlist #ops
 @config plugins.Geminoria.searchUrlsChannelAllowlist #support
-@config channel plugins.Geminoria.allowSearchLast #privateops false
-@config channel plugins.Geminoria.allowSearchUrls #privateops false
+@config channel plugins.Geminoria.allowSearchLast True or False (or On or Off)
+@config channel plugins.Geminoria.allowSearchUrls True or False (or On or Off)
 ```
+
+Cache notes:
+
+- Cache file: `data/Geminoria-cache.sqlite3` (Limnoria data directory).
+- Cache keys include network, channel, model, and history-tool policy to avoid cross-context mismatches.
+- Fuzzy matching is only used inside the same context and must meet `cacheFuzzyMinScore`.
 
 ## Usage
 
 ```
 <you> @gemini what config options control flood protection?
-<Borg> supybot.abuse.flood.command  supybot.abuse.flood.command.maximum ...
+<Borg> Flood protection in Limnoria is primarily managed via the supybot.abuse.flood group: | * supybot.abuse.flood.interval: The time window (in seconds) used to calculate message rates.* supybot.abuse.flood.command.maximum: Max commands allowed within the interval ....
+```
+
+Admin cache commands:
+
+```text
+@gemcache stats
+@gemcache clear
 ```
 
 ## Licence

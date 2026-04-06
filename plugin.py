@@ -21,7 +21,9 @@
 ###
 
 # Standard library
+import hashlib
 import re
+import sqlite3
 import threading
 import time
 from collections import deque
@@ -55,6 +57,7 @@ except ImportError:
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _CFG_KEY_RE = re.compile(r"\bsupybot(?:\.[A-Za-z0-9_-]+)+\b")
 _IRC_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+_QUERY_TOKEN_RE = re.compile(r"[a-z0-9]{2,}")
 _SECRET_PATTERNS = [
     re.compile(
         r"(?i)\b(api[_-]?key|token|secret|password|passwd|bearer)\b\s*[:=]\s*\S+"
@@ -130,6 +133,51 @@ def _normalized_channel_set(values: Any) -> set[str]:
     return {str(v).lower() for v in (values or []) if v}
 
 
+def _normalize_query(text: str) -> str:
+    if not text:
+        return ""
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9\s]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _query_tokens(text: str) -> set[str]:
+    return set(_QUERY_TOKEN_RE.findall(text or ""))
+
+
+def _similarity_score(left: str, right: str) -> int:
+    left_tokens = _query_tokens(left)
+    right_tokens = _query_tokens(right)
+    if not left_tokens or not right_tokens:
+        return 0
+    overlap = len(left_tokens & right_tokens)
+    union = len(left_tokens | right_tokens)
+    return int((overlap / union) * 100) if union else 0
+
+
+def _cache_key(
+    query_norm: str,
+    *,
+    network: str,
+    channel: Optional[str],
+    model: str,
+    allow_search_last: bool,
+    allow_search_urls: bool,
+) -> str:
+    raw = "|".join(
+        [
+            "v1",
+            str(network or ""),
+            str(channel or ""),
+            str(model or ""),
+            "1" if allow_search_last else "0",
+            "1" if allow_search_urls else "0",
+            query_norm,
+        ]
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def _build_client(api_key: str) -> Optional[genai.Client]:
     """Initialise and return a google.genai Client, or None on failure."""
     if not api_key:
@@ -182,6 +230,13 @@ def _get_cfg() -> Dict[str, Any]:
         "history_tools_channel_allowlist": [],
         "search_last_channel_allowlist": [],
         "search_urls_channel_allowlist": [],
+        "cache_enabled": True,
+        "cache_ttl_seconds": 86400,
+        "cache_max_entries": 2000,
+        "cache_min_query_length": 8,
+        "cache_allow_fuzzy": True,
+        "cache_fuzzy_min_score": 92,
+        "cache_prefix_hits": True,
     }
     try:
         plugins = getattr(conf.supybot, "plugins", None)
@@ -204,6 +259,13 @@ def _get_cfg() -> Dict[str, Any]:
             "history_tools_channel_allowlist": list(p.historyToolsChannelAllowlist()),
             "search_last_channel_allowlist": list(p.searchLastChannelAllowlist()),
             "search_urls_channel_allowlist": list(p.searchUrlsChannelAllowlist()),
+            "cache_enabled": bool(p.cacheEnabled()),
+            "cache_ttl_seconds": int(p.cacheTtlSeconds()),
+            "cache_max_entries": int(p.cacheMaxEntries()),
+            "cache_min_query_length": int(p.cacheMinQueryLength()),
+            "cache_allow_fuzzy": bool(p.cacheAllowFuzzy()),
+            "cache_fuzzy_min_score": int(p.cacheFuzzyMinScore()),
+            "cache_prefix_hits": bool(p.cachePrefixHits()),
         }
     except Exception:
         return defaults
@@ -355,6 +417,26 @@ def _format_config_matches(matches: list[str]) -> str:
     return "Config matches:\n" + "\n".join(f"- {match}" for match in matches)
 
 
+def _partition_config_results(
+    rows: list[tuple[str, bool]],
+) -> tuple[list[str], list[str], list[str]]:
+    """Deduplicate and partition config rows into leaf/parent/sorted-all."""
+    seen: set[str] = set()
+    leaf_matches: list[str] = []
+    parent_matches: list[str] = []
+    for full, is_leaf in rows:
+        if full in seen:
+            continue
+        seen.add(full)
+        if is_leaf:
+            leaf_matches.append(full)
+        else:
+            parent_matches.append(full)
+    leaf_matches = sorted(leaf_matches)
+    parent_matches = sorted(parent_matches)
+    return leaf_matches, parent_matches, leaf_matches + parent_matches
+
+
 # ---------------------------------------------------------------------------
 # Plugin class
 # ---------------------------------------------------------------------------
@@ -397,6 +479,14 @@ class Geminoria(callbacks.Plugin):
         # Per-channel in-flight request counts
         self._inflight_by_channel: Dict[str, int] = {}
         self._state_lock = threading.Lock()
+        self._cache_lock = threading.Lock()
+        self._cache_db_path = conf.supybot.directories.data.dirize(
+            "Geminoria-cache.sqlite3"
+        )
+        self._cache_has_fts = False
+        self._cache_ready = self._init_cache_db()
+        self._config_index: tuple[tuple[str, ...], tuple[str, ...]] = (tuple(), tuple())
+        self._rebuild_config_index()
         log.debug("Geminoria: plugin initialised.")
 
     # ------------------------------------------------------------------
@@ -423,31 +513,61 @@ class Geminoria(callbacks.Plugin):
     # Tool implementations
     # ------------------------------------------------------------------
 
-    def _tool_search_config(self, word: str, limit: int) -> str:
-        results: list = []
+    def _build_config_index(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        rows: list[tuple[str, bool]] = []
+        _walk_config(conf.supybot, "supybot", "", rows)
+        leaf, parent, _ = _partition_config_results(rows)
+        return tuple(leaf), tuple(parent)
+
+    def _rebuild_config_index(self) -> None:
+        started = time.monotonic()
         try:
-            _walk_config(conf.supybot, "supybot", word, results)
+            leaf, parent = self._build_config_index()
+            self._config_index = (leaf, parent)
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            log.debug(
+                "Geminoria: built config index leaf=%s parent=%s ms=%s",
+                len(leaf),
+                len(parent),
+                elapsed_ms,
+            )
         except Exception as exc:
-            log.error("Geminoria: search_config error: %s", exc)
-        seen = set()
-        leaf_matches = []
-        parent_matches = []
-        for full, is_leaf in results:
-            if full in seen:
-                continue
-            seen.add(full)
-            if is_leaf:
-                leaf_matches.append(full)
-            else:
-                parent_matches.append(full)
-        ordered_matches = sorted(leaf_matches) + sorted(parent_matches)
+            log.warning("Geminoria: config index build failed: %s", exc)
+            self._config_index = (tuple(), tuple())
+
+    def _search_config_live(self, word: str) -> tuple[list[str], list[str], list[str]]:
+        rows: list[tuple[str, bool]] = []
+        _walk_config(conf.supybot, "supybot", word, rows)
+        return _partition_config_results(rows)
+
+    def _tool_search_config(self, word: str, limit: int) -> str:
+        started = time.monotonic()
+        query = (word or "").lower()
+        leaf_index, parent_index = self._config_index
+        leaf_matches = [full for full in leaf_index if query in full.lower()]
+        parent_matches = [full for full in parent_index if query in full.lower()]
+        ordered_matches = leaf_matches + parent_matches
+
+        # Keep answers correct if loaded plugins/config changed after startup.
+        if not ordered_matches:
+            try:
+                live_leaf, live_parent, live_ordered = self._search_config_live(word)
+                if live_ordered:
+                    leaf_matches = live_leaf
+                    parent_matches = live_parent
+                    ordered_matches = live_ordered
+                    self._rebuild_config_index()
+            except Exception as exc:
+                log.error("Geminoria: search_config error: %s", exc)
+
         log.debug(
-            "Geminoria: search_config word=%r limit=%s matches=%s leaf_matches=%s parent_matches=%s",
+            "Geminoria: search_config word=%r limit=%s matches=%s leaf_matches=%s parent_matches=%s ms=%s",
             word,
             limit,
             len(ordered_matches),
             len(leaf_matches),
             len(parent_matches),
+            int((time.monotonic() - started) * 1000),
         )
         if not ordered_matches:
             return f"No config variables found containing '{word}'."
@@ -597,6 +717,441 @@ class Geminoria(callbacks.Plugin):
         if tool_name == "search_urls":
             return bool(self.registryValue("allowSearchUrls", channel, irc.network))
         return True
+
+    # ------------------------------------------------------------------
+    # Searchable query history cache (SQLite)
+    # ------------------------------------------------------------------
+
+    def _init_cache_db(self) -> bool:
+        try:
+            with self._cache_lock:
+                conn = sqlite3.connect(self._cache_db_path, timeout=2.0)
+                try:
+                    conn.execute("PRAGMA journal_mode=WAL")
+                    conn.execute("PRAGMA synchronous=NORMAL")
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS geminoria_cache (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            created_at INTEGER NOT NULL,
+                            updated_at INTEGER NOT NULL,
+                            last_hit_at INTEGER NOT NULL,
+                            hit_count INTEGER NOT NULL DEFAULT 0,
+                            network TEXT NOT NULL,
+                            channel TEXT NOT NULL,
+                            model TEXT NOT NULL,
+                            allow_search_last INTEGER NOT NULL,
+                            allow_search_urls INTEGER NOT NULL,
+                            query_original TEXT NOT NULL,
+                            query_norm TEXT NOT NULL,
+                            query_hash TEXT NOT NULL UNIQUE,
+                            response TEXT NOT NULL
+                        )
+                        """)
+                    conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_geminoria_cache_updated_at ON geminoria_cache(updated_at)"
+                    )
+                    conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_geminoria_cache_context ON geminoria_cache(network, channel, model)"
+                    )
+                    self._cache_has_fts = False
+                    fts_tokenizers: list[Optional[str]] = [
+                        None,  # default tokenizer (most portable)
+                        "unicode61",
+                        "porter unicode61",
+                        "ascii",
+                        "unicode61 porter",
+                    ]
+                    last_fts_exc: Optional[Exception] = None
+                    for tokenizer in fts_tokenizers:
+                        try:
+                            conn.execute("DROP TABLE IF EXISTS geminoria_cache_fts")
+                            if tokenizer is None:
+                                conn.execute("""
+                                    CREATE VIRTUAL TABLE geminoria_cache_fts
+                                    USING fts5(
+                                        entry_id UNINDEXED,
+                                        query_norm,
+                                        response
+                                    )
+                                    """)
+                            else:
+                                conn.execute(f"""
+                                    CREATE VIRTUAL TABLE geminoria_cache_fts
+                                    USING fts5(
+                                        entry_id UNINDEXED,
+                                        query_norm,
+                                        response,
+                                        tokenize = '{tokenizer}'
+                                    )
+                                    """)
+                            self._cache_has_fts = True
+                            log.debug(
+                                "Geminoria: FTS5 enabled with tokenizer=%s",
+                                tokenizer or "<default>",
+                            )
+                            break
+                        except sqlite3.Error as exc:
+                            last_fts_exc = exc
+                    if not self._cache_has_fts:
+                        log.warning(
+                            "Geminoria: FTS5 unavailable; fuzzy cache lookups disabled: %s",
+                            last_fts_exc,
+                        )
+                    conn.commit()
+                finally:
+                    conn.close()
+            return True
+        except Exception as exc:
+            log.error("Geminoria: cache initialisation failed: %s", exc)
+            return False
+
+    def _cache_lookup(
+        self,
+        cfg: Dict[str, Any],
+        *,
+        network: str,
+        channel: Optional[str],
+        model: str,
+        allow_search_last: bool,
+        allow_search_urls: bool,
+        query: str,
+    ) -> Optional[str]:
+        if not self._cache_ready or not cfg.get("cache_enabled", True):
+            return None
+        if len((query or "").strip()) < max(1, int(cfg["cache_min_query_length"])):
+            return None
+
+        query_norm = _normalize_query(query)
+        if not query_norm:
+            return None
+        query_hash = _cache_key(
+            query_norm,
+            network=network,
+            channel=channel,
+            model=model,
+            allow_search_last=allow_search_last,
+            allow_search_urls=allow_search_urls,
+        )
+        now = int(time.time())
+        ttl_cutoff = now - max(0, int(cfg["cache_ttl_seconds"]))
+
+        with self._cache_lock:
+            conn = sqlite3.connect(self._cache_db_path, timeout=2.0)
+            try:
+                exact = conn.execute(
+                    """
+                    SELECT id, response
+                    FROM geminoria_cache
+                    WHERE query_hash = ? AND updated_at >= ?
+                    LIMIT 1
+                    """,
+                    (query_hash, ttl_cutoff),
+                ).fetchone()
+                if exact:
+                    conn.execute(
+                        """
+                        UPDATE geminoria_cache
+                        SET hit_count = hit_count + 1, last_hit_at = ?
+                        WHERE id = ?
+                        """,
+                        (now, int(exact[0])),
+                    )
+                    conn.commit()
+                    log.debug("Geminoria: cache hit type=exact")
+                    return str(exact[1] or "")
+
+                if not (cfg.get("cache_allow_fuzzy", True) and self._cache_has_fts):
+                    return None
+
+                tokens = sorted(_query_tokens(query_norm))
+                if not tokens:
+                    return None
+                fts_query = " OR ".join(tokens[:8])
+                fuzzy_rows = conn.execute(
+                    """
+                    SELECT c.id, c.response, c.query_norm
+                    FROM geminoria_cache_fts f
+                    JOIN geminoria_cache c ON c.id = CAST(f.entry_id AS INTEGER)
+                    WHERE f.query_norm MATCH ?
+                      AND c.network = ?
+                      AND c.channel = ?
+                      AND c.model = ?
+                      AND c.allow_search_last = ?
+                      AND c.allow_search_urls = ?
+                      AND c.updated_at >= ?
+                    ORDER BY bm25(geminoria_cache_fts)
+                    LIMIT 12
+                    """,
+                    (
+                        fts_query,
+                        str(network or ""),
+                        str(channel or ""),
+                        str(model or ""),
+                        1 if allow_search_last else 0,
+                        1 if allow_search_urls else 0,
+                        ttl_cutoff,
+                    ),
+                ).fetchall()
+
+                best = None
+                best_score = -1
+                for row_id, response, cached_query_norm in fuzzy_rows:
+                    score = _similarity_score(query_norm, str(cached_query_norm or ""))
+                    if score > best_score:
+                        best = (int(row_id), str(response or ""))
+                        best_score = score
+
+                if not best:
+                    return None
+                min_score = max(0, min(100, int(cfg["cache_fuzzy_min_score"])))
+                if best_score < min_score:
+                    return None
+
+                conn.execute(
+                    """
+                    UPDATE geminoria_cache
+                    SET hit_count = hit_count + 1, last_hit_at = ?
+                    WHERE id = ?
+                    """,
+                    (now, best[0]),
+                )
+                conn.commit()
+                log.debug(
+                    "Geminoria: cache hit type=fuzzy score=%s threshold=%s",
+                    best_score,
+                    min_score,
+                )
+                return best[1]
+            except Exception as exc:
+                log.warning("Geminoria: cache lookup failed: %s", exc)
+                return None
+            finally:
+                conn.close()
+
+    def _cache_store(
+        self,
+        cfg: Dict[str, Any],
+        *,
+        network: str,
+        channel: Optional[str],
+        model: str,
+        allow_search_last: bool,
+        allow_search_urls: bool,
+        query: str,
+        response: str,
+    ) -> None:
+        if not self._cache_ready or not cfg.get("cache_enabled", True):
+            return
+        if len((query or "").strip()) < max(1, int(cfg["cache_min_query_length"])):
+            return
+        if not response:
+            return
+        if response.startswith("Gemini error:") or response.startswith("Geminoria:"):
+            return
+        if response.startswith("No answer produced"):
+            return
+
+        query_norm = _normalize_query(query)
+        if not query_norm:
+            return
+        query_hash = _cache_key(
+            query_norm,
+            network=network,
+            channel=channel,
+            model=model,
+            allow_search_last=allow_search_last,
+            allow_search_urls=allow_search_urls,
+        )
+        now = int(time.time())
+
+        with self._cache_lock:
+            conn = sqlite3.connect(self._cache_db_path, timeout=2.0)
+            try:
+                row = conn.execute(
+                    "SELECT id FROM geminoria_cache WHERE query_hash = ? LIMIT 1",
+                    (query_hash,),
+                ).fetchone()
+                if row:
+                    row_id = int(row[0])
+                    conn.execute(
+                        """
+                        UPDATE geminoria_cache
+                        SET updated_at = ?,
+                            network = ?,
+                            channel = ?,
+                            model = ?,
+                            allow_search_last = ?,
+                            allow_search_urls = ?,
+                            query_original = ?,
+                            query_norm = ?,
+                            response = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            now,
+                            str(network or ""),
+                            str(channel or ""),
+                            str(model or ""),
+                            1 if allow_search_last else 0,
+                            1 if allow_search_urls else 0,
+                            query,
+                            query_norm,
+                            response,
+                            row_id,
+                        ),
+                    )
+                else:
+                    cur = conn.execute(
+                        """
+                        INSERT INTO geminoria_cache (
+                            created_at, updated_at, last_hit_at, hit_count,
+                            network, channel, model, allow_search_last, allow_search_urls,
+                            query_original, query_norm, query_hash, response
+                        )
+                        VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            now,
+                            now,
+                            now,
+                            str(network or ""),
+                            str(channel or ""),
+                            str(model or ""),
+                            1 if allow_search_last else 0,
+                            1 if allow_search_urls else 0,
+                            query,
+                            query_norm,
+                            query_hash,
+                            response,
+                        ),
+                    )
+                    lastrowid = cur.lastrowid
+                    if lastrowid is None:
+                        raise RuntimeError("cache insert did not return lastrowid")
+                    row_id = lastrowid
+
+                if self._cache_has_fts:
+                    conn.execute(
+                        "DELETE FROM geminoria_cache_fts WHERE entry_id = ?",
+                        (str(row_id),),
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO geminoria_cache_fts (entry_id, query_norm, response)
+                        VALUES (?, ?, ?)
+                        """,
+                        (str(row_id), query_norm, response),
+                    )
+                conn.commit()
+                self._cache_prune(conn, max(1, int(cfg["cache_max_entries"])))
+            except Exception as exc:
+                log.warning("Geminoria: cache store failed: %s", exc)
+            finally:
+                conn.close()
+
+    def _cache_prune(self, conn: sqlite3.Connection, max_entries: int) -> None:
+        try:
+            row = conn.execute("SELECT COUNT(*) FROM geminoria_cache").fetchone()
+            total = int(row[0]) if row else 0
+            if total <= max_entries:
+                return
+            overflow = total - max_entries
+            stale_ids = [
+                int(r[0])
+                for r in conn.execute(
+                    """
+                    SELECT id
+                    FROM geminoria_cache
+                    ORDER BY updated_at ASC
+                    LIMIT ?
+                    """,
+                    (overflow,),
+                ).fetchall()
+            ]
+            if not stale_ids:
+                return
+            placeholders = ",".join("?" for _ in stale_ids)
+            conn.execute(
+                f"DELETE FROM geminoria_cache WHERE id IN ({placeholders})", stale_ids
+            )
+            if self._cache_has_fts:
+                conn.execute(
+                    f"DELETE FROM geminoria_cache_fts WHERE entry_id IN ({placeholders})",
+                    [str(i) for i in stale_ids],
+                )
+            conn.commit()
+        except Exception as exc:
+            log.warning("Geminoria: cache prune failed: %s", exc)
+
+    def _check_cache_admin(self, msg) -> bool:
+        try:
+            return bool(
+                ircdb.checkCapability(msg.prefix, "admin")
+                or ircdb.checkCapability(msg.prefix, "owner")
+            )
+        except Exception:
+            return False
+
+    def _cache_stats(self, cfg: Dict[str, Any]) -> str:
+        if not self._cache_ready:
+            return "Geminoria cache is unavailable."
+        ttl_seconds = max(0, int(cfg.get("cache_ttl_seconds", 0)))
+        now = int(time.time())
+        ttl_cutoff = now - ttl_seconds
+        with self._cache_lock:
+            conn = sqlite3.connect(self._cache_db_path, timeout=2.0)
+            try:
+                total_row = conn.execute(
+                    "SELECT COUNT(*), COALESCE(SUM(hit_count), 0) FROM geminoria_cache"
+                ).fetchone()
+                recent_row = conn.execute(
+                    "SELECT COUNT(*) FROM geminoria_cache WHERE updated_at >= ?",
+                    (ttl_cutoff,),
+                ).fetchone()
+                time_row = conn.execute("""
+                    SELECT MIN(updated_at), MAX(updated_at), MAX(last_hit_at)
+                    FROM geminoria_cache
+                    """).fetchone()
+                total = int(total_row[0]) if total_row else 0
+                total_hits = int(total_row[1]) if total_row else 0
+                active = int(recent_row[0]) if recent_row else 0
+                oldest = int(time_row[0]) if time_row and time_row[0] else 0
+                newest = int(time_row[1]) if time_row and time_row[1] else 0
+                last_hit = int(time_row[2]) if time_row and time_row[2] else 0
+                oldest_age = max(0, now - oldest) if oldest else 0
+                newest_age = max(0, now - newest) if newest else 0
+                hit_age = max(0, now - last_hit) if last_hit else 0
+                return (
+                    "gemcache stats | "
+                    f"rows={total} active_ttl={active} hits={total_hits} "
+                    f"fts={'on' if self._cache_has_fts else 'off'} "
+                    f"oldest_age_s={oldest_age} newest_age_s={newest_age} "
+                    f"last_hit_age_s={hit_age}"
+                )
+            except Exception as exc:
+                log.warning("Geminoria: cache stats failed: %s", exc)
+                return "Unable to read gemcache stats."
+            finally:
+                conn.close()
+
+    def _cache_clear(self) -> tuple[bool, int]:
+        if not self._cache_ready:
+            return False, 0
+        with self._cache_lock:
+            conn = sqlite3.connect(self._cache_db_path, timeout=2.0)
+            try:
+                row = conn.execute("SELECT COUNT(*) FROM geminoria_cache").fetchone()
+                before = int(row[0]) if row else 0
+                conn.execute("DELETE FROM geminoria_cache")
+                if self._cache_has_fts:
+                    conn.execute("DELETE FROM geminoria_cache_fts")
+                conn.commit()
+                return True, before
+            except Exception as exc:
+                log.warning("Geminoria: cache clear failed: %s", exc)
+                return False, 0
+            finally:
+                conn.close()
 
     # ------------------------------------------------------------------
     # Agentic loop
@@ -859,7 +1414,15 @@ class Geminoria(callbacks.Plugin):
         requiredCapability (including default-allow unless anti-capabilities
         are configured).
         """
+        _ = args
+        started_total = time.monotonic()
         cfg = _get_cfg()
+        channel = msg.args[0] if msg.args and irc.isChannel(msg.args[0]) else None
+        model = cfg["model"]
+        network = str(getattr(irc, "network", "") or "")
+        allow_search_last = self._tool_enabled("search_last", channel, irc, cfg)
+        allow_search_urls = self._tool_enabled("search_urls", channel, irc, cfg)
+        query_for_cache = _redact_sensitive(query) if cfg["redact_sensitive"] else query
         log.debug(
             "Geminoria: command invoked prefix=%s channel=%s query=%r",
             msg.prefix,
@@ -877,7 +1440,53 @@ class Geminoria(callbacks.Plugin):
             return
 
         try:
-            answer = self._run_gemini(irc, msg, query)
+            cache_started = time.monotonic()
+            answer = self._cache_lookup(
+                cfg,
+                network=network,
+                channel=channel,
+                model=model,
+                allow_search_last=allow_search_last,
+                allow_search_urls=allow_search_urls,
+                query=query_for_cache,
+            )
+            cache_lookup_ms = int((time.monotonic() - cache_started) * 1000)
+            cache_hit = answer is not None
+            if answer is None:
+                run_started = time.monotonic()
+                answer = self._run_gemini(irc, msg, query)
+                run_gemini_ms = int((time.monotonic() - run_started) * 1000)
+                response_for_cache = (
+                    _redact_sensitive(answer) if cfg["redact_sensitive"] else answer
+                )
+                store_started = time.monotonic()
+                self._cache_store(
+                    cfg,
+                    network=network,
+                    channel=channel,
+                    model=model,
+                    allow_search_last=allow_search_last,
+                    allow_search_urls=allow_search_urls,
+                    query=query_for_cache,
+                    response=response_for_cache,
+                )
+                cache_store_ms = int((time.monotonic() - store_started) * 1000)
+                log.debug(
+                    "Geminoria: timings cache_hit=%s cache_lookup_ms=%s run_gemini_ms=%s cache_store_ms=%s total_ms=%s",
+                    cache_hit,
+                    cache_lookup_ms,
+                    run_gemini_ms,
+                    cache_store_ms,
+                    int((time.monotonic() - started_total) * 1000),
+                )
+            elif cfg.get("cache_prefix_hits", True):
+                answer = f"[cached] {answer}"
+                log.debug(
+                    "Geminoria: timings cache_hit=%s cache_lookup_ms=%s total_ms=%s",
+                    cache_hit,
+                    cache_lookup_ms,
+                    int((time.monotonic() - started_total) * 1000),
+                )
         finally:
             self._release_request_slot(msg)
 
@@ -895,6 +1504,38 @@ class Geminoria(callbacks.Plugin):
         irc.reply(answer, prefixNick=False)
 
     gemini = wrap(gemini, ["text"])
+
+    def gemcache(self, irc, msg, args, action: str) -> None:
+        """<stats|clear>
+
+        Show cache stats or clear Geminoria's SQLite query cache.
+        Requires admin or owner capability.
+        """
+        _ = args
+        if not self._check_cache_admin(msg):
+            irc.errorNoCapability("admin", prefixNick=False)
+            return
+
+        action_norm = (action or "").strip().lower()
+        cfg = _get_cfg()
+
+        if action_norm == "stats":
+            irc.reply(self._cache_stats(cfg), prefixNick=False)
+            return
+        if action_norm == "clear":
+            ok, removed = self._cache_clear()
+            if not ok:
+                irc.reply("Unable to clear gemcache.", prefixNick=False)
+                return
+            irc.reply(
+                f"gemcache cleared ({removed} entr{'y' if removed == 1 else 'ies'} removed).",
+                prefixNick=False,
+            )
+            return
+
+        irc.reply("Usage: gemcache <stats|clear>", prefixNick=False)
+
+    gemcache = wrap(gemcache, ["something"])
 
 
 Class = Geminoria
