@@ -53,24 +53,20 @@ class GeminoriaCacheHelperTestCase(unittest.TestCase):
             conn.execute("INSERT INTO t(x) VALUES ('hello world')")
 
             with self.assertRaises(sqlite3.OperationalError) as alias_ctx:
-                conn.execute(
-                    """
+                conn.execute("""
                     SELECT rowid
                     FROM t AS f
                     WHERE t MATCH 'hello'
                     ORDER BY bm25(f)
-                    """
-                ).fetchall()
+                    """).fetchall()
             self.assertIn("no such column: f", str(alias_ctx.exception))
 
-            rows = conn.execute(
-                """
+            rows = conn.execute("""
                 SELECT rowid
                 FROM t AS f
                 WHERE t MATCH 'hello'
                 ORDER BY bm25(t)
-                """
-            ).fetchall()
+                """).fetchall()
             self.assertEqual(rows, [(1,)])
         finally:
             conn.close()
