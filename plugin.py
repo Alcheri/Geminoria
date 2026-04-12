@@ -44,6 +44,8 @@ import supybot.log as log
 from supybot import callbacks
 from supybot.commands import wrap
 
+from . import __version__ as PLUGIN_VERSION
+
 try:
     from supybot.i18n import PluginInternationalization
 
@@ -1504,6 +1506,16 @@ class Geminoria(callbacks.Plugin):
         irc.reply(answer, prefixNick=False)
 
     gemini = wrap(gemini, ["text"])
+
+    def gemversion(self, irc, msg, args) -> None:
+        """takes no arguments
+
+        Show the currently loaded Geminoria plugin version.
+        """
+        _ = (msg, args)
+        irc.reply(f"Geminoria version: {PLUGIN_VERSION}", prefixNick=False)
+
+    gemversion = wrap(gemversion)
 
     def gemcache(self, irc, msg, args, action: str) -> None:
         """<stats|clear>
