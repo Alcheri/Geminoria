@@ -1,27 +1,4 @@
-## 2026-04-05 - Security Hardening (v1.1.0-beta.2)
-
-- Added sensitive-data redaction before sending user/tool payloads to Gemini (`redactSensitiveData`).
-- Added safer logging defaults to avoid raw payload leakage (`logSensitiveData` defaults to `False`).
-- Added anti-abuse controls:
-  - Per-user cooldown (`cooldownSeconds`)
-  - Per-channel concurrency cap (`maxConcurrentPerChannel`)
-  - Reply length cap (`maxReplyChars`)
-- Added output sanitization to strip IRC control characters before replies.
-- Clarified docs and plugin help text around Limnoria capability behavior (default-allow unless anti-capabilities are configured).
-- Added channel-level controls for history tools:
-  - `allowSearchLast` (channel)
-  - `allowSearchUrls` (channel)
-- Added global allowlist controls for history tools:
-  - Shared allowlist: `historyToolsChannelAllowlist`
-  - Tool-specific allowlists: `searchLastChannelAllowlist`, `searchUrlsChannelAllowlist`
-  - Tool-specific allowlists take precedence over shared allowlist when set.
-- Added `TO-DO.md` tracking next security improvements.
-
-## 2026-04-04 - Published Build Update
-
-- Removed the `todo` command and all related storage/handler code from the GitHub-published Geminoria plugin.
-- Removed `todo` documentation from README.
-- Removed `todo`-specific tests from the test suite.
+<!-- Releases.md: Release and patch notes for Geminoria -->
 
 ## **_Agentic Gemini‑powered search for [Limnoria](https://github.com/progval/Limnoria) — Beta Release_**
 
@@ -75,3 +52,30 @@ This beta introduces a major architectural upgrade to Geminoria, shifting from e
 - This is a pre‑release intended for real‑world testing.
 - Behaviour may change slightly before the final 1.1.0 release.
 - Please report any issues with tool‑calling behaviour, config detection, or Gemini responses.
+
+---
+
+## 🔒 2026-04-05 - Security Hardening (v1.1.0-beta.2)
+
+- Added sensitive-data redaction before sending user/tool payloads to Gemini (`redactSensitiveData`).
+- Added safer logging defaults to avoid raw payload leakage (`logSensitiveData` defaults to `False`).
+- Added anti-abuse controls:
+  - Per-user cooldown (`cooldownSeconds`)
+  - Per-channel concurrency cap (`maxConcurrentPerChannel`)
+  - Reply length cap (`maxReplyChars`)
+- Added output sanitization to strip IRC control characters before replies.
+- Clarified docs and plugin help text around Limnoria capability behavior (default-allow unless anti-capabilities are configured).
+- Added channel-level controls for history tools:
+  - `allowSearchLast` (channel)
+  - `allowSearchUrls` (channel)
+- Added global allowlist controls for history tools:
+  - Shared allowlist: `historyToolsChannelAllowlist`
+  - Tool-specific allowlists: `searchLastChannelAllowlist`, `searchUrlsChannelAllowlist`
+  - Tool-specific allowlists take precedence over shared allowlist when set.
+- Added `TO-DO.md` tracking next security improvements.
+
+## 🧹 2026-04-04 - Published Build Update
+
+- Removed the `todo` command and all related storage/handler code from the GitHub-published Geminoria plugin.
+- Removed `todo` documentation from README.
+- Removed `todo`-specific tests from the test suite.
