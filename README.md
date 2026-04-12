@@ -5,6 +5,7 @@
 A Gemini-powered agentic search plugin for [Limnoria](https://github.com/progval/Limnoria).
 
 [![Tests](https://github.com/Alcheri/Geminoria/actions/workflows/tests.yml/badge.svg)](https://github.com/Alcheri/Geminoria/actions/workflows/tests.yml) [![Lint](https://github.com/Alcheri/Geminoria/actions/workflows/lint.yml/badge.svg)](https://github.com/Alcheri/Geminoria/actions/workflows/lint.yml) [![CodeQL](https://github.com/Alcheri/Geminoria/actions/workflows/codeql.yml/badge.svg)](https://github.com/Alcheri/Geminoria/security/code-scanning)
+[![Limnoria Compatible](https://img.shields.io/badge/limnoria-compatible-brightgreen.svg)](https://github.com/progval/Limnoria)
 
 ## Description
 
