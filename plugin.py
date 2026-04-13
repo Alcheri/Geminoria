@@ -24,7 +24,9 @@ try:
     from .core.textutils import normalized_progress_style as _normalized_progress_style
     from .core.textutils import progress_indicator_text as _progress_indicator_text
     from .core.textutils import redact_sensitive as _redact_sensitive
-    from .core.textutils import run_with_delayed_indicator as _run_with_delayed_indicator
+    from .core.textutils import (
+        run_with_delayed_indicator as _run_with_delayed_indicator,
+    )
     from .state.cache import cache_key as _cache_key
     from .state.cache import normalize_query as _normalize_query
     from .state.cache import similarity_score as _similarity_score
