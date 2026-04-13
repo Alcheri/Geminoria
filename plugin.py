@@ -14,17 +14,33 @@ from supybot import callbacks
 from supybot.commands import wrap
 
 from . import __version__ as PLUGIN_VERSION
-from .config.config_runtime import load_runtime_config
-from .core.core import GeminoriaCore
-from .core.services import AsyncGeminiService
-from .core.textutils import loggable_text as _loggable_text
-from .core.textutils import normalized_progress_style as _normalized_progress_style
-from .core.textutils import progress_indicator_text as _progress_indicator_text
-from .core.textutils import redact_sensitive as _redact_sensitive
-from .core.textutils import run_with_delayed_indicator as _run_with_delayed_indicator
-from .state.cache import cache_key as _cache_key
-from .state.cache import normalize_query as _normalize_query
-from .state.cache import similarity_score as _similarity_score
+
+try:
+    # Phase 2 package layout.
+    from .config.config_runtime import load_runtime_config
+    from .core.core import GeminoriaCore
+    from .core.services import AsyncGeminiService
+    from .core.textutils import loggable_text as _loggable_text
+    from .core.textutils import normalized_progress_style as _normalized_progress_style
+    from .core.textutils import progress_indicator_text as _progress_indicator_text
+    from .core.textutils import redact_sensitive as _redact_sensitive
+    from .core.textutils import run_with_delayed_indicator as _run_with_delayed_indicator
+    from .state.cache import cache_key as _cache_key
+    from .state.cache import normalize_query as _normalize_query
+    from .state.cache import similarity_score as _similarity_score
+except Exception:  # pragma: no cover - deployment compatibility fallback.
+    # Legacy flat layout fallback for partially upgraded bot plugin directories.
+    from .config_runtime import load_runtime_config
+    from .core import GeminoriaCore
+    from .services import AsyncGeminiService
+    from .textutils import loggable_text as _loggable_text
+    from .textutils import normalized_progress_style as _normalized_progress_style
+    from .textutils import progress_indicator_text as _progress_indicator_text
+    from .textutils import redact_sensitive as _redact_sensitive
+    from .textutils import run_with_delayed_indicator as _run_with_delayed_indicator
+    from .cache import cache_key as _cache_key
+    from .cache import normalize_query as _normalize_query
+    from .cache import similarity_score as _similarity_score
 
 
 def _get_cfg():
