@@ -6,6 +6,7 @@
 import unittest
 import sqlite3
 import time
+from unittest.mock import patch
 
 from . import plugin
 
@@ -13,6 +14,14 @@ from . import plugin
 class GeminoriaSmokeTestCase(unittest.TestCase):
     def test_plugin_module_exports_class(self):
         self.assertTrue(hasattr(plugin, "Class"))
+
+    def test_gemversion_reply_text_includes_configured_model(self):
+        with patch.object(
+            plugin, "_get_cfg", return_value={"model": "gemini-test-model"}
+        ):
+            text = plugin._gemversion_reply_text()
+        self.assertIn(f"Geminoria version: {plugin.PLUGIN_VERSION}", text)
+        self.assertIn("model: gemini-test-model", text)
 
 
 class GeminoriaCacheHelperTestCase(unittest.TestCase):

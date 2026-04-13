@@ -116,6 +116,12 @@ def _loggable_args(args: Dict[str, Any], cfg: Dict[str, Any]) -> Any:
     return {"keys": sorted(args.keys())}
 
 
+def _gemversion_reply_text() -> str:
+    """Return the gemversion reply text with plugin version and configured model."""
+    model = _get_cfg()["model"]
+    return f"Geminoria version: {PLUGIN_VERSION} | model: {model}"
+
+
 def _truncate(text: str, limit: int) -> str:
     if limit <= 0 or len(text) <= limit:
         return text
@@ -1594,10 +1600,10 @@ class Geminoria(callbacks.Plugin):
     def gemversion(self, irc, msg, args) -> None:
         """takes no arguments
 
-        Show the currently loaded Geminoria plugin version.
+        Show the currently loaded Geminoria plugin version and model.
         """
         _ = (msg, args)
-        irc.reply(f"Geminoria version: {PLUGIN_VERSION}", prefixNick=False)
+        irc.reply(_gemversion_reply_text(), prefixNick=False)
 
     gemversion = wrap(gemversion)
 
