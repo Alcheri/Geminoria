@@ -23,7 +23,9 @@ __author__ = supybot.Author("Barry Suridge", "Alcheri", "barry.suridge@gmail.com
 __contributors__ = {}
 __url__ = "https://github.com/Alcheri/Geminoria "
 
-from .config import config as config_module
+# Accept either the phase-2 package layout (config/) or a flat config.py module
+# if a deployment still has mixed files during upgrade.
+from . import config as config_module
 from . import plugin
 
 reload(config_module)
