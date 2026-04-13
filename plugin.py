@@ -229,6 +229,10 @@ def _get_cfg() -> Dict[str, Any]:
         "cooldown_seconds": 10,
         "max_concurrent_per_channel": 1,
         "max_reply_chars": 350,
+        "progress_indicator_enabled": True,
+        "progress_indicator_delay_ms": 1200,
+        "progress_indicator_style": "dots",
+        "progress_indicator_message": "",
         "history_tools_channel_allowlist": [],
         "search_last_channel_allowlist": [],
         "search_urls_channel_allowlist": [],
@@ -245,7 +249,7 @@ def _get_cfg() -> Dict[str, Any]:
         p = getattr(plugins, "Geminoria", None)
         if p is None:
             return defaults
-        return {
+        cfg = {
             "api_key": str(p.apiKey()),
             "model": str(p.model()),
             "required_cap": str(p.requiredCapability()),
@@ -258,6 +262,10 @@ def _get_cfg() -> Dict[str, Any]:
             "cooldown_seconds": int(p.cooldownSeconds()),
             "max_concurrent_per_channel": int(p.maxConcurrentPerChannel()),
             "max_reply_chars": int(p.maxReplyChars()),
+            "progress_indicator_enabled": bool(p.progressIndicatorEnabled()),
+            "progress_indicator_delay_ms": int(p.progressIndicatorDelayMs()),
+            "progress_indicator_style": str(p.progressIndicatorStyle()),
+            "progress_indicator_message": str(p.progressIndicatorMessage()),
             "history_tools_channel_allowlist": list(p.historyToolsChannelAllowlist()),
             "search_last_channel_allowlist": list(p.searchLastChannelAllowlist()),
             "search_urls_channel_allowlist": list(p.searchUrlsChannelAllowlist()),
@@ -269,8 +277,63 @@ def _get_cfg() -> Dict[str, Any]:
             "cache_fuzzy_min_score": int(p.cacheFuzzyMinScore()),
             "cache_prefix_hits": bool(p.cachePrefixHits()),
         }
+        cfg["progress_indicator_delay_ms"] = max(
+            0, int(cfg.get("progress_indicator_delay_ms", 1200))
+        )
+        cfg["progress_indicator_style"] = _normalized_progress_style(
+            str(cfg.get("progress_indicator_style", "dots"))
+        )
+        return cfg
     except Exception:
         return defaults
+
+
+def _normalized_progress_style(style: str) -> str:
+    val = (style or "").strip().lower()
+    return val if val in ("plain", "dots") else "dots"
+
+
+def _progress_indicator_text(cfg: Dict[str, Any]) -> str:
+    custom = str(cfg.get("progress_indicator_message", "") or "").strip()
+    if custom:
+        return _sanitize_irc_text(custom)
+
+    style = _normalized_progress_style(str(cfg.get("progress_indicator_style", "dots")))
+    if cfg.get("disable_ansi", False):
+        return "Geminoria is thinking ..."
+
+    if style == "plain":
+        return "\x0312Geminoria is thinking ...\x0f"
+    return "\x0312■\x0306■\x0310■\x0f Geminoria is thinking ..."
+
+
+def _run_with_delayed_indicator(
+    run_fn,
+    indicator_fn,
+    delay_ms: int,
+):
+    done = threading.Event()
+    result: Dict[str, Any] = {"value": None, "error": None}
+
+    def worker() -> None:
+        try:
+            result["value"] = run_fn()
+        except Exception as exc:
+            result["error"] = exc
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=worker, name="GeminoriaRunWorker", daemon=True)
+    thread.start()
+
+    wait_seconds = max(0, int(delay_ms)) / 1000.0
+    if not done.wait(wait_seconds):
+        indicator_fn()
+        done.wait()
+
+    if result["error"] is not None:
+        raise result["error"]
+    return result["value"]
 
 
 # ---------------------------------------------------------------------------
@@ -695,6 +758,16 @@ class Geminoria(callbacks.Plugin):
                 self._inflight_by_channel.pop(channel, None)
             else:
                 self._inflight_by_channel[channel] = inflight - 1
+
+    def _emit_progress_indicator(self, irc, cfg: Dict[str, Any]) -> None:
+        text = _progress_indicator_text(cfg)
+        if not text:
+            return
+        log.debug(
+            "Geminoria: sending progress indicator style=%s",
+            cfg.get("progress_indicator_style", "dots"),
+        )
+        irc.reply(text, prefixNick=False)
 
     def _tool_enabled(
         self, tool_name: str, channel: Optional[str], irc, cfg: Dict[str, Any]
@@ -1456,7 +1529,18 @@ class Geminoria(callbacks.Plugin):
             cache_hit = answer is not None
             if answer is None:
                 run_started = time.monotonic()
-                answer = self._run_gemini(irc, msg, query)
+                if cfg.get("progress_indicator_enabled", True):
+                    try:
+                        answer = _run_with_delayed_indicator(
+                            lambda: self._run_gemini(irc, msg, query),
+                            lambda: self._emit_progress_indicator(irc, cfg),
+                            int(cfg.get("progress_indicator_delay_ms", 1200)),
+                        )
+                    except Exception as exc:
+                        log.error("Geminoria: run-with-indicator error: %s", exc)
+                        answer = f"Gemini error: {exc}"
+                else:
+                    answer = self._run_gemini(irc, msg, query)
                 run_gemini_ms = int((time.monotonic() - run_started) * 1000)
                 response_for_cache = (
                     _redact_sensitive(answer) if cfg["redact_sensitive"] else answer

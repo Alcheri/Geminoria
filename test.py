@@ -5,6 +5,7 @@
 
 import unittest
 import sqlite3
+import time
 
 from . import plugin
 
@@ -70,6 +71,78 @@ class GeminoriaCacheHelperTestCase(unittest.TestCase):
             self.assertEqual(rows, [(1,)])
         finally:
             conn.close()
+
+
+class GeminoriaProgressConfigTestCase(unittest.TestCase):
+    def test_get_cfg_includes_progress_keys(self):
+        cfg = plugin._get_cfg()
+        self.assertIn("progress_indicator_enabled", cfg)
+        self.assertIn("progress_indicator_delay_ms", cfg)
+        self.assertIn("progress_indicator_style", cfg)
+        self.assertIn("progress_indicator_message", cfg)
+        self.assertGreaterEqual(int(cfg["progress_indicator_delay_ms"]), 0)
+        self.assertIn(
+            cfg["progress_indicator_style"],
+            ("dots", "plain"),
+        )
+
+    def test_progress_style_fallback(self):
+        self.assertEqual(plugin._normalized_progress_style("plain"), "plain")
+        self.assertEqual(plugin._normalized_progress_style("dots"), "dots")
+        self.assertEqual(plugin._normalized_progress_style("unknown-style"), "dots")
+
+
+class GeminoriaProgressIndicatorTestCase(unittest.TestCase):
+    def test_fast_run_does_not_emit_indicator(self):
+        events = []
+        value = plugin._run_with_delayed_indicator(
+            run_fn=lambda: "ok",
+            indicator_fn=lambda: events.append("indicator"),
+            delay_ms=50,
+        )
+        self.assertEqual(value, "ok")
+        self.assertEqual(events, [])
+
+    def test_slow_run_emits_indicator_once(self):
+        events = []
+
+        def slow_run():
+            time.sleep(0.06)
+            return "done"
+
+        value = plugin._run_with_delayed_indicator(
+            run_fn=slow_run,
+            indicator_fn=lambda: events.append("indicator"),
+            delay_ms=10,
+        )
+        self.assertEqual(value, "done")
+        self.assertEqual(events, ["indicator"])
+
+    def test_error_before_delay_does_not_emit_indicator(self):
+        events = []
+
+        def fail_fast():
+            raise RuntimeError("boom")
+
+        with self.assertRaises(RuntimeError):
+            plugin._run_with_delayed_indicator(
+                run_fn=fail_fast,
+                indicator_fn=lambda: events.append("indicator"),
+                delay_ms=50,
+            )
+        self.assertEqual(events, [])
+
+    def test_disable_ansi_progress_text_has_no_irc_formatting(self):
+        text = plugin._progress_indicator_text(
+            {
+                "disable_ansi": True,
+                "progress_indicator_style": "dots",
+                "progress_indicator_message": "",
+            }
+        )
+        self.assertEqual(text, "Geminoria is thinking ...")
+        self.assertNotIn("\x03", text)
+        self.assertNotIn("\x02", text)
 
 
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

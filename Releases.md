@@ -55,6 +55,18 @@ This beta introduces a major architectural upgrade to Geminoria, shifting from e
 
 ---
 
+## ⏳ 2026-04-13 - Progress Indicator UX
+
+- Added delayed, non-spam progress status for `@gemini` while Gemini is running.
+- Default behavior is enabled and quiet:
+  - `progressIndicatorEnabled=True`
+  - `progressIndicatorDelayMs=1200`
+  - Single status line only (no frame animation spam)
+- Added configurable indicator presentation:
+  - `progressIndicatorStyle` (`dots` or `plain`)
+  - `progressIndicatorMessage` (custom status text override)
+- Indicator is only used on non-cached runs and is emitted at most once per request.
+
 ## 🔒 2026-04-05 - Security Hardening (v1.1.0-beta.2)
 
 - Added sensitive-data redaction before sending user/tool payloads to Gemini (`redactSensitiveData`).

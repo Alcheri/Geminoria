@@ -86,6 +86,10 @@ or set `requiredCapability` to `admin` / `owner`.
 | `cooldownSeconds` | `10` | Minimum delay between calls from the same user hostmask |
 | `maxConcurrentPerChannel` | `1` | Max in-flight Geminoria requests per channel |
 | `maxReplyChars` | `350` | Maximum response length sent back to IRC |
+| `progressIndicatorEnabled` | `True` | Enable delayed one-line "working" status on non-cached runs |
+| `progressIndicatorDelayMs` | `1200` | Delay before status line appears (milliseconds) |
+| `progressIndicatorStyle` | `dots` | Status style: `dots` or `plain` |
+| `progressIndicatorMessage` | `''` (empty) | Optional custom status text; empty uses style default |
 | `historyToolsChannelAllowlist` | `''` (empty) | Space-separated channels allowed to use `search_last`/`search_urls`; empty means all channels |
 | `searchLastChannelAllowlist` | `''` (empty) | Space-separated channels allowed for `search_last`; if set, overrides shared history allowlist for this tool |
 | `searchUrlsChannelAllowlist` | `''` (empty) | Space-separated channels allowed for `search_urls`; if set, overrides shared history allowlist for this tool |
@@ -107,6 +111,9 @@ Channel policy examples:
 @config plugins.Geminoria.searchUrlsChannelAllowlist #support
 @config channel plugins.Geminoria.allowSearchLast True or False (or On or Off)
 @config channel plugins.Geminoria.allowSearchUrls True or False (or On or Off)
+@config plugins.Geminoria.progressIndicatorEnabled True
+@config plugins.Geminoria.progressIndicatorDelayMs 1200
+@config plugins.Geminoria.progressIndicatorStyle dots
 ```
 
 Cache notes:

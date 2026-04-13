@@ -141,6 +141,44 @@ conf.registerGlobalValue(
 
 conf.registerGlobalValue(
     Geminoria,
+    "progressIndicatorEnabled",
+    registry.Boolean(
+        True,
+        _("Enable a delayed one-line progress indicator while Gemini is running."),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "progressIndicatorDelayMs",
+    registry.Integer(
+        1200,
+        _("Delay before showing progress indicator (milliseconds)."),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "progressIndicatorStyle",
+    registry.String(
+        "dots",
+        _("Progress indicator style. Supported values: dots, plain."),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
+    "progressIndicatorMessage",
+    registry.String(
+        "",
+        _(
+            "Optional custom progress text. If empty, Geminoria uses the selected style."
+        ),
+    ),
+)
+
+conf.registerGlobalValue(
+    Geminoria,
     "historyToolsChannelAllowlist",
     registry.SpaceSeparatedSetOfStrings(
         [],
