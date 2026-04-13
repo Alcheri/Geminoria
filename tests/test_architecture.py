@@ -1,13 +1,15 @@
+import importlib
+from pathlib import Path
 import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from .cache import CacheRepository, cache_key, normalize_query
-from .config_runtime import RuntimeConfig
-from .core import GeminoriaCore, gemversion_reply_text
-from .services import AsyncGeminiService
-from .memory import MemoryStore
+from ..config.config_runtime import RuntimeConfig
+from ..core.core import GeminoriaCore, gemversion_reply_text
+from ..core.services import AsyncGeminiService
+from ..state.cache import CacheRepository, cache_key, normalize_query
+from ..state.memory import MemoryStore
 
 
 class ConfigRuntimeTestCase(unittest.TestCase):
@@ -105,7 +107,7 @@ class AsyncServiceTestCase(unittest.TestCase):
             def __init__(self):
                 self.models = FakeModels()
 
-        with patch("Geminoria.services._build_client", return_value=FakeClient()):
+        with patch("Geminoria.core.services._build_client", return_value=FakeClient()):
             svc = AsyncGeminiService()
             try:
                 out = svc.generate_content(
@@ -165,6 +167,45 @@ class CoreCompatibilityTestCase(unittest.TestCase):
         text = gemversion_reply_text()
         self.assertIn("Geminoria version:", text)
         self.assertIn("| model:", text)
+
+
+class PackageStructureTestCase(unittest.TestCase):
+    def test_expected_layout_files_exist(self):
+        root = Path(__file__).resolve().parents[1]
+        required = [
+            "core/core.py",
+            "core/system.py",
+            "core/services.py",
+            "core/textutils.py",
+            "state/cache.py",
+            "state/memory.py",
+            "config/config.py",
+            "config/config_runtime.py",
+            "tests/test.py",
+            "tests/test_architecture.py",
+        ]
+        for rel in required:
+            self.assertTrue((root / rel).exists(), rel)
+
+    def test_new_package_layout_imports(self):
+        self.assertIsNotNone(importlib.import_module("Geminoria.core.core"))
+        self.assertIsNotNone(importlib.import_module("Geminoria.state.cache"))
+        self.assertIsNotNone(importlib.import_module("Geminoria.config.config_runtime"))
+        self.assertIsNotNone(importlib.import_module("Geminoria.tests.test"))
+
+    def test_legacy_import_paths_are_removed_in_phase_two(self):
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("Geminoria.cache")
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("Geminoria.memory")
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("Geminoria.services")
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("Geminoria.system")
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("Geminoria.textutils")
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("Geminoria.config_runtime")
 
 
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

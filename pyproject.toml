@@ -24,3 +24,6 @@ Geminoria = "limnoria_geminoria "
 
 [tool.setuptools.package-data]
 "limnoria_geminoria " = ["locales/*.po"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -14,10 +14,10 @@ import supybot.ircutils as ircutils
 
 from google.genai import types as gtypes
 
-from . import __version__ as PLUGIN_VERSION
-from .cache import CacheRepository
-from .config_runtime import RuntimeConfig, load_runtime_config
-from .memory import MemoryStore
+from .. import __version__ as PLUGIN_VERSION
+from ..config.config_runtime import RuntimeConfig, load_runtime_config
+from ..state.cache import CacheRepository
+from ..state.memory import MemoryStore
 from .services import GeminiService
 from .system import SYSTEM_INSTRUCTION, gen_config, make_tools
 from .textutils import (

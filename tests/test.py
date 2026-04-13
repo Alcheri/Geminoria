@@ -8,7 +8,7 @@ import sqlite3
 import time
 from unittest.mock import patch
 
-from . import plugin
+from .. import plugin
 
 
 class GeminoriaSmokeTestCase(unittest.TestCase):
