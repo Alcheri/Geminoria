@@ -2,7 +2,7 @@
 
 ## **_Agentic Gemini‑powered search for [Limnoria](https://github.com/progval/Limnoria) — Beta Release_**
 
-This beta introduces a major architectural upgrade to Geminoria, shifting from environment‑based configuration to a fully **Limnoria‑native**, **config‑driven**, **agentic design**. It is feature‑complete for the 1.1 series and ready for wider testing.
+This beta introduces a major architectural upgrade to Geminoria, shifting from environment‑based configuration to a fully **Limnoria‑native**, **config‑driven**, **agentic design**.
 
 # ✨ What’s new
 
@@ -49,9 +49,9 @@ This beta introduces a major architectural upgrade to Geminoria, shifting from e
 
 # ⚠️ Beta notes
 
-- This is a pre‑release intended for real‑world testing.
-- Behaviour may change slightly before the final 1.1.0 release.
-- Please report any issues with tool‑calling behaviour, config detection, or Gemini responses.
+- Geminoria is now published as a SemVer beta release (`1.1.0-beta.3`).
+- Internal architecture now supports modular service/core/memory/cache separation.
+- Please report any issues with tool-calling behaviour, config detection, or Gemini responses.
 
 ---
 
@@ -66,6 +66,12 @@ This beta introduces a major architectural upgrade to Geminoria, shifting from e
   - `progressIndicatorStyle` (`dots` or `plain`)
   - `progressIndicatorMessage` (custom status text override)
 - Indicator is only used on non-cached runs and is emitted at most once per request.
+
+## 🏷️ 2026-04-13 - SemVer Release Tag (v1.1.0-beta.3)
+
+- Bumped release version from `1.1.0-beta.2` to `1.1.0-beta.3`.
+- Updated package metadata and docs version tags to `1.1.0-beta.3`.
+- Finalized architecture split baseline for future collaborative modules (`core.py`, `services.py`, `memory.py`, `cache.py`).
 
 ## 🔒 2026-04-05 - Security Hardening (v1.1.0-beta.2)
 

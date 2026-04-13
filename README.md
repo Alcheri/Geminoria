@@ -1,6 +1,6 @@
-<!-- Geminoria 1.1.0-beta.2 – Gemini-powered agentic search plugin for Limnoria. -->
+<!-- Geminoria 1.1.0-beta.3 – Gemini-powered agentic search plugin for Limnoria. -->
 
-# Geminoria v1.1.0-beta.2
+# Geminoria v1.1.0-beta.3
 
 A Gemini-powered agentic search plugin for [Limnoria](https://github.com/progval/Limnoria).
 

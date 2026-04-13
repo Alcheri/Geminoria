@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "limnoria-geminoria"
-version = "1.1.0-beta.2"
+version = "1.1.0-beta.3"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Barry Suridge", email = "barry.suridge@gmail.com" }]
