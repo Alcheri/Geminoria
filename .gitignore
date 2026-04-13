@@ -10,6 +10,13 @@ CACHEDIR.TAG
 venv/
 env/
 
+# supybot
+backup/
+conf/
+logs/
+data/
+tmp/
+
 # IDE files
 .vscode/
 .idea/
