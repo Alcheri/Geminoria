@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Text, logging, and progress helper utilities for Geminoria."""
 
 from __future__ import annotations

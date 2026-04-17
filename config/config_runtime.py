@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Runtime configuration loader for Geminoria."""
 
 from __future__ import annotations

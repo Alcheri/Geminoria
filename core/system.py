@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """System prompt and Gemini tool declaration helpers."""
 
 from __future__ import annotations

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Gemini API services for Geminoria."""
 
 from __future__ import annotations

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from supybot import conf, registry
 
 try:

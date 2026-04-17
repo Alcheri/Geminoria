@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """SQLite-backed cache repository and query similarity helpers."""
 
 from __future__ import annotations

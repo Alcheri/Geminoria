@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """In-memory buffers and request slot controls."""
 
 from __future__ import annotations

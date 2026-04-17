@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Core orchestration for Geminoria query handling."""
 
 from __future__ import annotations
