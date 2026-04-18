@@ -30,6 +30,39 @@ from .textutils import (
     run_with_delayed_indicator,
 )
 
+_QUERY_TOKEN_RE = re.compile(r"[a-z0-9_]+")
+_SCOPE_HINTS = frozenset(
+    {
+        "limnoria",
+        "supybot",
+        "geminoria",
+        "plugin",
+        "plugins",
+        "config",
+        "configuration",
+        "setting",
+        "settings",
+        "capability",
+        "capabilities",
+        "anticapability",
+        "anti",
+        "command",
+        "commands",
+        "channel",
+        "channels",
+        "irc",
+        "nick",
+        "owner",
+        "admin",
+        "flood",
+        "abuse",
+    }
+)
+_OUT_OF_SCOPE_REPLY = (
+    "Geminoria only answers Limnoria bot questions (config, commands, "
+    "capabilities, and channel history tools)."
+)
+
 
 def gemversion_reply_text() -> str:
     model = load_runtime_config().model
@@ -280,6 +313,35 @@ class GeminoriaCore:
             return "search_urls is disabled for this context."
         return f"Unknown tool: {fn}"
 
+    def _is_in_scope_query(self, irc, query: str) -> bool:
+        query_norm = str(query or "").strip().lower()
+        if not query_norm:
+            return False
+        if "supybot." in query_norm:
+            return True
+        if re.search(r"@[a-z0-9][a-z0-9_-]*", query_norm):
+            return True
+
+        tokens = set(_QUERY_TOKEN_RE.findall(query_norm))
+        if not tokens:
+            return False
+        if tokens & _SCOPE_HINTS:
+            return True
+
+        try:
+            for cb in getattr(irc, "callbacks", []) or []:
+                plugin_name = str(cb.name() or "").strip().lower()
+                if plugin_name and plugin_name in tokens:
+                    return True
+                for cmd in cb.listCommands():
+                    cmd_name = str(cmd or "").strip().lower()
+                    if cmd_name and cmd_name in tokens:
+                        return True
+        except Exception:
+            return False
+
+        return False
+
     def _run_gemini(self, irc, msg, query: str, cfg: RuntimeConfig) -> str:
         api_key = cfg.api_key
         if not api_key:
@@ -441,7 +503,8 @@ class GeminoriaCore:
                                 "question directly in plain text. Do not call any more "
                                 "tools. If this is a configuration question, list the "
                                 "exact config variable names first, then a brief "
-                                "explanation."
+                                "explanation. Keep the reply short for IRC "
+                                "(one paragraph, max 2 sentences unless asked for detail)."
                             )
                         )
                     ],
@@ -503,6 +566,12 @@ class GeminoriaCore:
     ) -> str:
         started_total = time.monotonic()
         cfg = self.load_cfg()
+        if not self._is_in_scope_query(irc, query):
+            log.debug(
+                "Geminoria: query rejected by scope gate query=%r",
+                loggable_text(query, cfg),
+            )
+            return _OUT_OF_SCOPE_REPLY
         channel = msg.args[0] if msg.args and irc.isChannel(msg.args[0]) else None
         model = cfg.model
         network = str(getattr(irc, "network", "") or "")
@@ -580,6 +649,8 @@ class GeminoriaCore:
             answer = ircutils.stripFormatting(answer)
         else:
             answer = highlight_config_keys(answer)
-        answer = truncate(answer, max(1, int(cfg.max_reply_chars)))
+        max_reply_chars = int(cfg.max_reply_chars)
+        if max_reply_chars > 0:
+            answer = truncate(answer, max_reply_chars)
         log.debug("Geminoria: replying text=%r", loggable_text(answer, cfg))
         return answer

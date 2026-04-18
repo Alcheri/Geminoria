@@ -85,7 +85,7 @@ or set `requiredCapability` to `admin` / `owner`.
 | `logSensitiveData` | `False` | Log raw query/tool payloads in debug logs (disabled by default) |
 | `cooldownSeconds` | `10` | Minimum delay between calls from the same user hostmask |
 | `maxConcurrentPerChannel` | `1` | Max in-flight Geminoria requests per channel |
-| `maxReplyChars` | `350` | Maximum response length sent back to IRC |
+| `maxReplyChars` | `350` | Maximum response length sent back to IRC (`0` disables plugin-side truncation so Limnoria `more` paging can handle long replies) |
 | `progressIndicatorEnabled` | `True` | Enable delayed one-line "working" status on non-cached runs |
 | `progressIndicatorDelayMs` | `1200` | Delay before status line appears (milliseconds) |
 | `progressIndicatorStyle` | `dots` | Status style: `dots` or `plain` |
@@ -134,6 +134,12 @@ Admin cache commands:
 ```text
 @gemcache stats
 @gemcache clear
+```
+
+Owner diagnostics:
+
+```text
+@gemdiag
 ```
 
 ## Licence

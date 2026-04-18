@@ -134,7 +134,11 @@ conf.registerGlobalValue(
     "maxReplyChars",
     registry.Integer(
         350,
-        _("Maximum final reply length sent to IRC (characters)."),
+        _(
+            "Maximum final reply length sent to IRC (characters). "
+            "Set to 0 to disable Geminoria-side truncation and rely on "
+            "Limnoria's reply.mores paging."
+        ),
     ),
 )
 

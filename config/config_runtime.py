@@ -48,6 +48,7 @@ class RuntimeConfig:
             self.search_urls_channel_allowlist or []
         )
         self.progress_indicator_delay_ms = max(0, int(self.progress_indicator_delay_ms))
+        self.max_reply_chars = max(0, int(self.max_reply_chars))
         style = str(self.progress_indicator_style or "").strip().lower()
         self.progress_indicator_style = style if style in ("dots", "plain") else "dots"
 

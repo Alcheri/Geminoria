@@ -23,6 +23,17 @@ class GeminoriaSmokeTestCase(unittest.TestCase):
         self.assertIn(f"Geminoria version: {plugin.PLUGIN_VERSION}", text)
         self.assertIn("model: gemini-test-model", text)
 
+    def test_gemdiag_reply_text_includes_paths(self):
+        with patch.object(
+            plugin, "_get_cfg", return_value={"model": "gemini-test-model"}
+        ):
+            text = plugin._gemdiag_reply_text()
+        self.assertIn(f"Geminoria version: {plugin.PLUGIN_VERSION}", text)
+        self.assertIn("model: gemini-test-model", text)
+        self.assertIn("plugin: ", text)
+        self.assertIn("core: ", text)
+        self.assertIn("runtime: ", text)
+
 
 class GeminoriaCacheHelperTestCase(unittest.TestCase):
     def test_normalize_query(self):

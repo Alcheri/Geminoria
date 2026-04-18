@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from ..config.config_runtime import RuntimeConfig
-from ..core.core import GeminoriaCore, gemversion_reply_text
+from ..core.core import _OUT_OF_SCOPE_REPLY, GeminoriaCore, gemversion_reply_text
 from ..core.services import AsyncGeminiService
 from ..state.cache import CacheRepository, cache_key, normalize_query
 from ..state.memory import MemoryStore
@@ -155,11 +155,11 @@ class CoreCompatibilityTestCase(unittest.TestCase):
                 model=cfg.model,
                 allow_search_last=True,
                 allow_search_urls=True,
-                query="hello",
+                query="limnoria hello",
                 response="cached response",
             )
             answer = core.handle_query(
-                FakeIrc(), msg, "hello", emit_progress=lambda: None
+                FakeIrc(), msg, "limnoria hello", emit_progress=lambda: None
             )
             self.assertTrue(answer.startswith("[cached]"))
 
@@ -167,6 +167,130 @@ class CoreCompatibilityTestCase(unittest.TestCase):
         text = gemversion_reply_text()
         self.assertIn("Geminoria version:", text)
         self.assertIn("| model:", text)
+
+    def test_core_rejects_out_of_scope_query_without_calling_service(self):
+        class FakeService:
+            def __init__(self):
+                self.calls = 0
+
+            def generate_content(self, **kwargs):
+                self.calls += 1
+                return SimpleNamespace(candidates=[], text="should not run")
+
+            def close(self):
+                return None
+
+        class FakeIrc:
+            network = "DALnet"
+            callbacks = []
+
+            @staticmethod
+            def isChannel(value):
+                return bool(value and value.startswith("#"))
+
+        msg = SimpleNamespace(prefix="nick!u@h", args=["#ops", "hello"])
+        service = FakeService()
+
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3") as tmp:
+            core = GeminoriaCore(
+                cache_db_path=tmp.name,
+                service=service,
+                channel_flag_getter=lambda key, channel, network: True,
+            )
+            answer = core.handle_query(
+                FakeIrc(), msg, "explain tsunamis", emit_progress=lambda: None
+            )
+
+        self.assertEqual(answer, _OUT_OF_SCOPE_REPLY)
+        self.assertEqual(service.calls, 0)
+
+    def test_core_allows_limnoria_scoped_query(self):
+        class FakeService:
+            def __init__(self):
+                self.calls = 0
+
+            def generate_content(self, **kwargs):
+                self.calls += 1
+                return SimpleNamespace(candidates=[], text="Use @config search flood")
+
+            def close(self):
+                return None
+
+        class FakeIrc:
+            network = "DALnet"
+            callbacks = []
+
+            @staticmethod
+            def isChannel(value):
+                return bool(value and value.startswith("#"))
+
+        msg = SimpleNamespace(prefix="nick!u@h", args=["#ops", "hello"])
+        service = FakeService()
+
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3") as tmp:
+            core = GeminoriaCore(
+                cache_db_path=tmp.name,
+                service=service,
+                channel_flag_getter=lambda key, channel, network: True,
+            )
+            cfg = RuntimeConfig(cache_enabled=False, api_key="k")
+            core.load_cfg = lambda: cfg
+            answer = core.handle_query(
+                FakeIrc(),
+                msg,
+                "what limnoria config controls flood protection?",
+                emit_progress=lambda: None,
+            )
+
+        self.assertEqual(answer, "Use @config search flood")
+        self.assertEqual(service.calls, 1)
+
+    def test_max_reply_chars_zero_disables_truncation(self):
+        class FakeService:
+            def close(self):
+                return None
+
+        class FakeIrc:
+            network = "DALnet"
+            callbacks = []
+
+            @staticmethod
+            def isChannel(value):
+                return bool(value and value.startswith("#"))
+
+        msg = SimpleNamespace(prefix="nick!u@h", args=["#ops", "hello"])
+        long_answer = "x" * 500
+
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3") as tmp:
+            core = GeminoriaCore(
+                cache_db_path=tmp.name,
+                service=FakeService(),
+                channel_flag_getter=lambda key, channel, network: True,
+            )
+            cfg = RuntimeConfig(
+                cache_min_query_length=1,
+                cache_prefix_hits=False,
+                max_reply_chars=0,
+            )
+            core.load_cfg = lambda: cfg
+            core._cache.store(
+                cfg,
+                network="DALnet",
+                channel="#ops",
+                model=cfg.model,
+                allow_search_last=True,
+                allow_search_urls=True,
+                query="limnoria long response",
+                response=long_answer,
+            )
+            answer = core.handle_query(
+                FakeIrc(),
+                msg,
+                "limnoria long response",
+                emit_progress=lambda: None,
+            )
+
+        self.assertEqual(answer, long_answer)
 
 
 class PackageStructureTestCase(unittest.TestCase):

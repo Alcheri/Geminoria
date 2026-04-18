@@ -7,7 +7,11 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import supybot.conf as conf
+import supybot.ircdb as ircdb
 import supybot.log as log
 from supybot import callbacks
 from supybot.commands import wrap
@@ -53,6 +57,27 @@ def _gemversion_reply_text() -> str:
     return f"Geminoria version: {PLUGIN_VERSION} | model: {model}"
 
 
+def _gemdiag_reply_text() -> str:
+    model = _get_cfg()["model"]
+    core_module = sys.modules.get(GeminoriaCore.__module__)
+    runtime_module = sys.modules.get(load_runtime_config.__module__)
+    plugin_path = str(Path(__file__).resolve())
+    core_path = str(
+        Path(getattr(core_module, "__file__", "<unknown>")).resolve()
+        if getattr(core_module, "__file__", None)
+        else "<unknown>"
+    )
+    runtime_path = str(
+        Path(getattr(runtime_module, "__file__", "<unknown>")).resolve()
+        if getattr(runtime_module, "__file__", None)
+        else "<unknown>"
+    )
+    return (
+        f"Geminoria version: {PLUGIN_VERSION} | model: {model} | "
+        f"plugin: {plugin_path} | core: {core_path} | runtime: {runtime_path}"
+    )
+
+
 class Geminoria(callbacks.Plugin):
     """Gemini-powered agentic search for Limnoria."""
 
@@ -90,6 +115,12 @@ class Geminoria(callbacks.Plugin):
 
     def _check_cache_admin(self, msg) -> bool:
         return self._core.check_cache_admin(msg)
+
+    def _check_owner(self, msg) -> bool:
+        try:
+            return bool(ircdb.checkCapability(msg.prefix, "owner"))
+        except Exception:
+            return False
 
     def _acquire_request_slot(self, msg, cfg):
         return self._core.acquire_request_slot(msg, cfg)
@@ -192,6 +223,20 @@ class Geminoria(callbacks.Plugin):
         irc.reply("Usage: gemcache <stats|clear>", prefixNick=False)
 
     gemcache = wrap(gemcache, ["something"])
+
+    def gemdiag(self, irc, msg, args) -> None:
+        """takes no arguments
+
+        Show loaded module paths and runtime metadata for diagnostics.
+        Requires owner capability.
+        """
+        _ = args
+        if not self._check_owner(msg):
+            irc.errorNoCapability("owner", prefixNick=False)
+            return
+        irc.reply(_gemdiag_reply_text(), prefixNick=False)
+
+    gemdiag = wrap(gemdiag)
 
 
 Class = Geminoria
