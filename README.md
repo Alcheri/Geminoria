@@ -109,8 +109,8 @@ Channel policy examples:
 @config plugins.Geminoria.historyToolsChannelAllowlist #ops #support
 @config plugins.Geminoria.searchLastChannelAllowlist #ops
 @config plugins.Geminoria.searchUrlsChannelAllowlist #support
-@config channel plugins.Geminoria.allowSearchLast True or False (or On or Off)
-@config channel plugins.Geminoria.allowSearchUrls True or False (or On or Off)
+@config plugins.Geminoria.allowSearchLast True or False (or On or Off)
+@config plugins.Geminoria.allowSearchUrls True or False (or On or Off)
 @config plugins.Geminoria.progressIndicatorEnabled True
 @config plugins.Geminoria.progressIndicatorDelayMs 1200
 @config plugins.Geminoria.progressIndicatorStyle dots
