@@ -106,9 +106,9 @@ or set `requiredCapability` to `admin` / `owner`.
 Channel policy examples:
 
 ```text
-@config networks.DALnet.plugins.Geminoria.historyToolsChannelAllowlist #ops #support
-@config networks.DALnet.plugins.Geminoria.searchLastChannelAllowlist #ops
-@config networks.DALnet.plugins.Geminoria.searchUrlsChannelAllowlist #support
+@config network <Network> plugins.Geminoria.historyToolsChannelAllowlist #ops #support
+@config network <Network> plugins.Geminoria.searchLastChannelAllowlist #ops
+@config network <Network> plugins.Geminoria.searchUrlsChannelAllowlist #support
 @config plugins.Geminoria.allowSearchLast True or False (or On or Off)
 @config plugins.Geminoria.allowSearchUrls True or False (or On or Off)
 @config plugins.Geminoria.progressIndicatorEnabled True
