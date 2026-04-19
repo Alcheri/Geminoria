@@ -1,6 +1,6 @@
-<!-- Geminoria 1.1.0-beta.3 – Gemini-powered agentic search plugin for Limnoria. -->
+<!-- Geminoria 1.1.0-beta.4 – Gemini-powered agentic search plugin for Limnoria. -->
 
-# Geminoria v1.1.0-beta.3
+# Geminoria v1.1.0-beta.4
 
 A Gemini-powered agentic search plugin for [Limnoria](https://github.com/progval/Limnoria).
 
@@ -90,9 +90,9 @@ or set `requiredCapability` to `admin` / `owner`.
 | `progressIndicatorDelayMs` | `1200` | Delay before status line appears (milliseconds) |
 | `progressIndicatorStyle` | `dots` | Status style: `dots` or `plain` |
 | `progressIndicatorMessage` | `''` (empty) | Optional custom status text; empty uses style default |
-| `historyToolsChannelAllowlist` | `''` (empty) | Space-separated channels allowed to use `search_last`/`search_urls`; empty means all channels |
-| `searchLastChannelAllowlist` | `''` (empty) | Space-separated channels allowed for `search_last`; if set, overrides shared history allowlist for this tool |
-| `searchUrlsChannelAllowlist` | `''` (empty) | Space-separated channels allowed for `search_urls`; if set, overrides shared history allowlist for this tool |
+| `historyToolsChannelAllowlist` (network) | `''` (empty) | Per-network space-separated channels allowed to use `search_last`/`search_urls`; empty means all channels |
+| `searchLastChannelAllowlist` (network) | `''` (empty) | Per-network space-separated channels allowed for `search_last`; if set, overrides shared history allowlist for this tool |
+| `searchUrlsChannelAllowlist` (network) | `''` (empty) | Per-network space-separated channels allowed for `search_urls`; if set, overrides shared history allowlist for this tool |
 | `allowSearchLast` (channel) | `True` | Allow `search_last` in a given channel |
 | `allowSearchUrls` (channel) | `True` | Allow `search_urls` in a given channel |
 | `cacheEnabled` | `True` | Enable persistent SQLite query-history cache |
@@ -106,9 +106,9 @@ or set `requiredCapability` to `admin` / `owner`.
 Channel policy examples:
 
 ```text
-@config plugins.Geminoria.historyToolsChannelAllowlist #ops #support
-@config plugins.Geminoria.searchLastChannelAllowlist #ops
-@config plugins.Geminoria.searchUrlsChannelAllowlist #support
+@config networks.DALnet.plugins.Geminoria.historyToolsChannelAllowlist #ops #support
+@config networks.DALnet.plugins.Geminoria.searchLastChannelAllowlist #ops
+@config networks.DALnet.plugins.Geminoria.searchUrlsChannelAllowlist #support
 @config plugins.Geminoria.allowSearchLast True or False (or On or Off)
 @config plugins.Geminoria.allowSearchUrls True or False (or On or Off)
 @config plugins.Geminoria.progressIndicatorEnabled True

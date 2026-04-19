@@ -18,7 +18,7 @@ import supybot
 from supybot import world
 from importlib import reload
 
-__version__ = "1.1.0-beta.3"
+__version__ = "1.1.0-beta.4"
 __author__ = supybot.Author("Barry Suridge", "Alcheri", "barry.suridge@gmail.com")
 __contributors__ = {}
 __url__ = "https://github.com/Alcheri/Geminoria "

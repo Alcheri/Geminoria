@@ -55,6 +55,15 @@ This beta introduces a major architectural upgrade to Geminoria, shifting from e
 
 ---
 
+## 🌐 2026-04-19 - Network-Aware History Tool Allowlists (v1.1.0-beta.4)
+
+- Bumped release version from `1.1.0-beta.3` to `1.1.0-beta.4`.
+- Changed `historyToolsChannelAllowlist` to a network-scoped setting.
+- Changed `searchLastChannelAllowlist` to a network-scoped setting.
+- Changed `searchUrlsChannelAllowlist` to a network-scoped setting.
+- Updated runtime tool gating to read those allowlists from the active IRC network context.
+- Updated README examples to show explicit per-network config paths.
+
 ## ⏳ 2026-04-13 - Progress Indicator UX
 
 - Added delayed, non-spam progress status for `@gemini` while Gemini is running.

@@ -105,6 +105,22 @@ class Geminoria(callbacks.Plugin):
     def _channel_flag_getter(self, key: str, channel: str, network: str):
         return self.registryValue(key, channel, network)
 
+    def _apply_network_allowlists(self, cfg, network: str) -> None:
+        if not network:
+            return
+        try:
+            cfg.history_tools_channel_allowlist = list(
+                self.registryValue("historyToolsChannelAllowlist", network=network)
+            )
+            cfg.search_last_channel_allowlist = list(
+                self.registryValue("searchLastChannelAllowlist", network=network)
+            )
+            cfg.search_urls_channel_allowlist = list(
+                self.registryValue("searchUrlsChannelAllowlist", network=network)
+            )
+        except Exception:
+            return
+
     def doPrivmsg(self, irc, msg) -> None:
         cfg = _get_cfg()
         self._core.on_privmsg(irc, msg, cfg)
@@ -129,6 +145,9 @@ class Geminoria(callbacks.Plugin):
         self._core.release_request_slot(msg)
 
     def _tool_enabled(self, tool_name: str, channel, irc, cfg) -> bool:
+        self._apply_network_allowlists(
+            cfg, network=str(getattr(irc, "network", "") or "")
+        )
         return self._core.tool_enabled(
             tool_name,
             channel=channel,
