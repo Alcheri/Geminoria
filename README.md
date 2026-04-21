@@ -142,6 +142,10 @@ Owner diagnostics:
 @gemdiag
 ```
 
+## Languages
+
+<img src="https://flagcdn.com/w40/gb.png" width="40" alt="United Kingdom"> <img src="https://flagcdn.com/w40/au.png" width="40" alt="Australia"> <img src="https://flagcdn.com/w40/us.png" width="40" alt="United States">
+
 ## Licence
 
 See [LICENCE.md](LICENCE.md).
