@@ -18,6 +18,20 @@ classifiers = [
 [project.entry-points.'limnoria.plugins']
 Geminoria = "limnoria_geminoria "
 
+[tool.black]
+target-version = ["py311"]
+extend-exclude = '''
+/(
+    backup
+  | conf
+  | data
+  | logs
+  | tmp
+  | __pycache__
+  | \.pytest_cache
+)/
+'''
+
 [tool.setuptools.package-dir]
 "limnoria_geminoria " = "."
 "limnoria_geminoria .local" = "local/"
