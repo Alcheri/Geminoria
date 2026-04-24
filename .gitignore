@@ -5,6 +5,9 @@ local/__pycache__/
 .pytest_cache/
 CACHEDIR.TAG
 
+# Codex files
+*.codex
+
 # Virtual environments
 .venv/
 venv/
