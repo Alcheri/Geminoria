@@ -13,9 +13,9 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "Limnoria-LocalControl" ]
+    branches: [ "AI-Geminoria" ]
   pull_request:
-    branches: [ "Limnoria-LocalControl" ]
+    branches: [ "AI-Geminoria" ]
   schedule:
     - cron: '17 11 * * 3'
 

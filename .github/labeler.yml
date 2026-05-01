@@ -1,0 +1,37 @@
+plugin:
+  - changed-files:
+      - any-glob-to-any-file:
+          - __init__.py
+          - plugin.py
+          - config.py
+          - cooldown.py
+          - local/**
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - LICENCE.md
+          - docs/**
+
+examples:
+  - changed-files:
+      - any-glob-to-any-file:
+          - examples/**
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - test.py
+
+packaging:
+  - changed-files:
+      - any-glob-to-any-file:
+          - pyproject.toml
+          - requirements.txt
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/labeler.yml
