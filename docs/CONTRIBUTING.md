@@ -18,7 +18,7 @@ If you have contributed code, documentation, or fixes, your name will appear the
 Contributions are welcome.
 Please open a pull request with a clear description of the change.
 
-By submitting a contribution, you agree that your work may be modified, redistributed, or relicensed as part of the project.
+By submitting a contribution, you agree that your work may be modified and redistributed as part of the project, and that your contribution is provided under the project's existing licence as described in [Licence.md](../LICENCE.md).
 
 ## Recognition
 
