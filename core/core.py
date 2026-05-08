@@ -134,6 +134,24 @@ class GeminoriaCore:
             re.compile(r"https?://\S+", re.IGNORECASE),
         )
 
+    def _check_user_capability(self, msg, capability: str) -> bool:
+        try:
+            user = ircdb.users.getUser(msg.prefix)
+        except KeyError:
+            pass
+        except Exception:
+            return False
+        else:
+            try:
+                return bool(user._checkCapability(capability))
+            except Exception:
+                return False
+
+        try:
+            return bool(ircdb.checkCapability(msg.prefix, capability))
+        except Exception:
+            return False
+
     def check_capability(self, msg, cfg: RuntimeConfig) -> bool:
         if not cfg.required_cap:
             return True
@@ -149,14 +167,14 @@ class GeminoriaCore:
         except Exception:
             return False
 
+    def check_owner(self, msg) -> bool:
+        return self._check_user_capability(msg, "owner")
+
     def check_cache_admin(self, msg) -> bool:
-        try:
-            return bool(
-                ircdb.checkCapability(msg.prefix, "admin")
-                or ircdb.checkCapability(msg.prefix, "owner")
-            )
-        except Exception:
-            return False
+        return bool(
+            self._check_user_capability(msg, "admin")
+            or self._check_user_capability(msg, "owner")
+        )
 
     def tool_enabled(
         self,

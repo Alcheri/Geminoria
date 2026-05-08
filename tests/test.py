@@ -6,7 +6,8 @@
 import unittest
 import sqlite3
 import time
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from .. import plugin
 
@@ -110,6 +111,46 @@ class GeminoriaProgressConfigTestCase(unittest.TestCase):
         self.assertEqual(plugin._normalized_progress_style("plain"), "plain")
         self.assertEqual(plugin._normalized_progress_style("dots"), "dots")
         self.assertEqual(plugin._normalized_progress_style("unknown-style"), "dots")
+
+
+class GeminoriaCapabilityTestCase(unittest.TestCase):
+    def test_check_owner_accepts_authenticated_owner_user(self):
+        core = plugin.GeminoriaCore.__new__(plugin.GeminoriaCore)
+        msg = SimpleNamespace(prefix="owner!ident@transient.example")
+        user = MagicMock()
+        user._checkCapability.return_value = True
+
+        with patch.object(
+            plugin.ircdb, "users", SimpleNamespace(getUser=MagicMock(return_value=user))
+        ):
+            with patch.object(
+                plugin.ircdb, "checkCapability", return_value=False
+            ) as check_capability:
+                self.assertTrue(core.check_owner(msg))
+
+        user._checkCapability.assert_called_once_with("owner")
+        check_capability.assert_not_called()
+
+    def test_check_cache_admin_accepts_authenticated_owner_user(self):
+        core = plugin.GeminoriaCore.__new__(plugin.GeminoriaCore)
+        msg = SimpleNamespace(prefix="owner!ident@transient.example")
+
+        def fake_get_user(_prefix):
+            return SimpleNamespace(
+                _checkCapability=lambda capability: capability == "owner"
+            )
+
+        with patch.object(
+            plugin.ircdb,
+            "users",
+            SimpleNamespace(getUser=MagicMock(side_effect=fake_get_user)),
+        ):
+            with patch.object(
+                plugin.ircdb, "checkCapability", return_value=False
+            ) as check_capability:
+                self.assertTrue(core.check_cache_admin(msg))
+
+        check_capability.assert_not_called()
 
 
 class GeminoriaProgressIndicatorTestCase(unittest.TestCase):

@@ -133,10 +133,7 @@ class Geminoria(callbacks.Plugin):
         return self._core.check_cache_admin(msg)
 
     def _check_owner(self, msg) -> bool:
-        try:
-            return bool(ircdb.checkCapability(msg.prefix, "owner"))
-        except Exception:
-            return False
+        return self._core.check_owner(msg)
 
     def _acquire_request_slot(self, msg, cfg):
         return self._core.acquire_request_slot(msg, cfg)
