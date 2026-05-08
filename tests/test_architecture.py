@@ -3,8 +3,9 @@ from pathlib import Path
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+from .. import plugin
 from ..config.config_runtime import RuntimeConfig
 from ..core.core import _OUT_OF_SCOPE_REPLY, GeminoriaCore, gemversion_reply_text
 from ..core.services import AsyncGeminiService
@@ -123,6 +124,24 @@ class AsyncServiceTestCase(unittest.TestCase):
 
 
 class CoreCompatibilityTestCase(unittest.TestCase):
+    def test_plugin_check_owner_falls_back_when_core_helper_is_missing(self):
+        geminoria = plugin.Geminoria.__new__(plugin.Geminoria)
+        geminoria._core = object()
+        msg = SimpleNamespace(prefix="owner!ident@transient.example")
+        user = MagicMock()
+        user._checkCapability.return_value = True
+
+        with patch.object(
+            plugin.ircdb, "users", SimpleNamespace(getUser=MagicMock(return_value=user))
+        ):
+            with patch.object(
+                plugin.ircdb, "checkCapability", return_value=False
+            ) as check_capability:
+                self.assertTrue(geminoria._check_owner(msg))
+
+        user._checkCapability.assert_called_once_with("owner")
+        check_capability.assert_not_called()
+
     def test_core_handle_query_uses_cache_prefix(self):
         class FakeService:
             def generate_content(self, **kwargs):

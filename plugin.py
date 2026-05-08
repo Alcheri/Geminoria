@@ -78,6 +78,25 @@ def _gemdiag_reply_text() -> str:
     )
 
 
+def _check_user_capability(msg, capability: str) -> bool:
+    try:
+        user = ircdb.users.getUser(msg.prefix)
+    except KeyError:
+        pass
+    except Exception:
+        return False
+    else:
+        try:
+            return bool(user._checkCapability(capability))
+        except Exception:
+            return False
+
+    try:
+        return bool(ircdb.checkCapability(msg.prefix, capability))
+    except Exception:
+        return False
+
+
 class Geminoria(callbacks.Plugin):
     """Gemini-powered agentic search for Limnoria."""
 
@@ -133,7 +152,10 @@ class Geminoria(callbacks.Plugin):
         return self._core.check_cache_admin(msg)
 
     def _check_owner(self, msg) -> bool:
-        return self._core.check_owner(msg)
+        check_owner = getattr(self._core, "check_owner", None)
+        if check_owner is not None:
+            return bool(check_owner(msg))
+        return _check_user_capability(msg, "owner")
 
     def _acquire_request_slot(self, msg, cfg):
         return self._core.acquire_request_slot(msg, cfg)
