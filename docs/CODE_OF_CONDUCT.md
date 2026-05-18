@@ -1,126 +1,98 @@
-# Contributor Covenant Code of Conduct
+# Code of Conduct
 
-## Our Pledge
+## Purpose
 
-As members, contributors, and leaders, we want this community to be a welcoming,
-harassment-free place for everyone, regardless of age, body size, visible or
-invisible disability, ethnicity, sex characteristics, gender identity and
-expression, level of experience, education, socio-economic status, nationality,
-personal appearance, race, religion, or sexual identity and orientation.
+Geminoria is a Gemini-powered agentic search plugin for Limnoria. It can receive
+IRC queries, call configured search tools, inspect recent channel history where
+allowed, use a query cache, and return AI-generated answers.
 
-We aim to act and interact in ways that support an open, welcoming, diverse,
-inclusive, and healthy community.
+This Code of Conduct sets expectations for respectful community behaviour and
+responsible AI use around this project.
 
-## Our Standards
+## Community Standards
 
-Behaviour that helps keep the community positive and healthy includes:
+Contributors, operators, and users are expected to:
 
-* Demonstrating empathy and kindness toward other people
-* Being respectful of differing opinions, viewpoints, and experiences
-* Giving and gracefully accepting constructive feedback
-* Accepting responsibility and apologising to those affected by our mistakes,
-  and learning from the experience
-* Focusing on what is best not just for us as individuals, but for the
-  overall community
+- Treat other people with respect and patience.
+- Give and accept technical feedback constructively.
+- Avoid harassment, intimidation, personal attacks, and discriminatory language.
+- Avoid publishing private information without explicit permission.
+- Keep discussion focused on improving the plugin and its safe operation.
 
-Examples of unacceptable behaviour include:
+Unacceptable behaviour includes abuse, harassment, sustained disruption, and
+conduct that would reasonably make other people feel unsafe or unwelcome.
 
-* The use of sexualised language or imagery, and sexual attention or
-  advances of any kind
-* Trolling, insulting or derogatory comments, and personal or political attacks
-* Public or private harassment
-* Publishing others' private information, such as a physical or email
-  address, without their explicit permission
-* Other conduct which could reasonably be considered inappropriate in a
-  professional setting
+## Responsible AI And Tool Use
 
-## Enforcement Responsibilities
+AI output can be wrong, incomplete, biased, or unsafe. Contributors and
+operators must not present Geminoria's replies as authoritative professional
+advice or as a substitute for human judgement.
 
-Community leaders are responsible for clarifying and enforcing our standards of
-acceptable behaviour and will take appropriate and fair corrective action in
-response to any behaviour that they deem inappropriate, threatening, offensive,
-or harmful.
+Because Geminoria is agentic, contributions should preserve safeguards around:
 
-Community leaders have the right and responsibility to remove, edit, or reject
-comments, commits, code, wiki edits, issues, and other contributions that are
-not aligned to this Code of Conduct, and will communicate reasons for moderation
-decisions when appropriate.
+- tool declarations and tool-call limits;
+- capability checks and channel-level policy;
+- history-tool allowlists for `search_last` and `search_urls`;
+- redaction before data is sent to Gemini;
+- output sanitisation before replies reach IRC;
+- cache keys that avoid cross-network or cross-channel leakage.
 
-## Scope
+Changes that weaken these protections should explain the operational trade-off
+and include appropriate tests or review notes.
 
-This Code of Conduct applies within all community spaces, and also applies when
-an individual is officially representing the community in public spaces.
-Examples of representing our community include using an official email address,
-posting via an official social media account, or acting as an appointed
-representative at an online or offline event.
+## Privacy And Data Handling
+
+Queries, selected tool results, and permitted history context may be sent to an
+external AI provider. Operators should make that clear to their users and avoid
+feeding sensitive personal data, secrets, credentials, private messages, or
+confidential operational details into the plugin.
+
+Contributors should keep sensitive logging disabled by default and avoid adding
+logs that expose raw prompts, tool payloads, tokens, hostmasks, or private
+channel content unless there is a clear debugging need and an explicit operator
+setting.
+
+## Safety, Moderation, And Abuse Prevention
+
+Geminoria should not be used to harass people, automate abuse, bypass channel
+rules, impersonate trusted users, generate malicious instructions, or mine
+channel history outside the configured policy.
+
+Safety-related reports may involve:
+
+- capability or allowlist bypasses;
+- history-tool access outside intended channels;
+- output that exposes secrets or private content;
+- prompt or tool patterns that produce unsafe replies;
+- cache behaviour that reuses results in the wrong context.
+
+Report security-sensitive issues privately as described in
+[Security Policy](SECURITY.md). General conduct concerns may be reported to
+@Alcheri on GitHub.
+
+## Operator Responsibilities
+
+Operators are responsible for configuring the plugin appropriately for their IRC
+network and community. This includes access controls, history-tool policy, cache
+settings, logging settings, rate limits, and provider API credentials.
+
+Operators should review the relevant provider policies before enabling the
+plugin in public or semi-public channels:
+
+- [Google AI Gemini API Terms](https://ai.google.dev/gemini-api/terms)
+- [Google Privacy Policy](https://policies.google.com/privacy)
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behaviour may be
-reported to the community leaders responsible for enforcement via @Alcheri on
-GitHub.
-All complaints will be reviewed and investigated promptly and fairly.
+Project maintainers may remove comments, reject contributions, close issues,
+block users, or decline support when behaviour conflicts with this Code of
+Conduct or creates avoidable safety risk.
 
-All community leaders are obligated to respect the privacy and security of the
-reporter of any incident.
-
-## Enforcement Guidelines
-
-Community leaders will follow these Community Impact Guidelines in determining
-the consequences for any action they deem in violation of this Code of Conduct:
-
-### 1. Correction
-
-**Community Impact**: Use of inappropriate language or other behaviour deemed
-unprofessional or unwelcome in the community.
-
-**Consequence**: A private, written warning from community leaders, providing
-clarity around the nature of the violation and an explanation of why the
-behaviour was inappropriate. A public apology may be requested.
-
-### 2. Warning
-
-**Community Impact**: A violation through a single incident or series
-of actions.
-
-**Consequence**: A warning with consequences for continued behaviour. No
-interaction with the people involved, including unsolicited interaction with
-those enforcing the Code of Conduct, for a specified period of time. This
-includes avoiding interactions in community spaces as well as external channels
-like social media. Violating these terms may lead to a temporary or
-permanent ban.
-
-### 3. Temporary Ban
-
-**Community Impact**: A serious violation of community standards, including
-sustained inappropriate behaviour.
-
-**Consequence**: A temporary ban from any sort of interaction or public
-communication with the community for a specified period of time. No public or
-private interaction with the people involved, including unsolicited interaction
-with those enforcing the Code of Conduct, is allowed during this period.
-Violating these terms may lead to a permanent ban.
-
-### 4. Permanent Ban
-
-**Community Impact**: Demonstrating a pattern of violation of community
-standards, including sustained inappropriate behaviour, harassment of an
-individual, or aggression toward or disparagement of classes of individuals.
-
-**Consequence**: A permanent ban from any sort of public interaction within
-the community.
+Enforcement should be proportionate, documented where practical, and mindful of
+the privacy and security of people reporting concerns.
 
 ## Attribution
 
-This Code of Conduct is adapted from the [Contributor Covenant][homepage],
-version 2.0, available at
-<https://www.contributor-covenant.org/version/2/0/code_of_conduct.html>.
-
-Community Impact Guidelines were inspired by [Mozilla's code of conduct
-enforcement ladder](https://github.com/mozilla/diversity).
-
-[homepage]: https://www.contributor-covenant.org
-
-For answers to common questions about this code of conduct, see the FAQ at
-<https://www.contributor-covenant.org/faq>. Translations are available at
-<https://www.contributor-covenant.org/translations>.
+The community standards and enforcement structure are informed by the
+[Contributor Covenant](https://www.contributor-covenant.org/), version 2.0, and
+adapted for an AI-enabled Limnoria plugin.
