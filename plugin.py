@@ -24,8 +24,12 @@ try:
     from .core.core import GeminoriaCore
     from .core.services import AsyncGeminiService
     from .core.textutils import loggable_text as _loggable_text
-    from .core.textutils import normalized_progress_style as _normalized_progress_style
-    from .core.textutils import progress_indicator_text as _progress_indicator_text
+    from .core.textutils import (
+        normalized_progress_style as _normalized_progress_style,
+    )
+    from .core.textutils import (
+        progress_indicator_text as _progress_indicator_text,
+    )
     from .core.textutils import redact_sensitive as _redact_sensitive
     from .core.textutils import (
         run_with_delayed_indicator as _run_with_delayed_indicator,
@@ -39,10 +43,14 @@ except Exception:  # pragma: no cover - deployment compatibility fallback.
     from .core import GeminoriaCore
     from .services import AsyncGeminiService
     from .textutils import loggable_text as _loggable_text
-    from .textutils import normalized_progress_style as _normalized_progress_style
+    from .textutils import (
+        normalized_progress_style as _normalized_progress_style,
+    )
     from .textutils import progress_indicator_text as _progress_indicator_text
     from .textutils import redact_sensitive as _redact_sensitive
-    from .textutils import run_with_delayed_indicator as _run_with_delayed_indicator
+    from .textutils import (
+        run_with_delayed_indicator as _run_with_delayed_indicator,
+    )
     from .cache import cache_key as _cache_key
     from .cache import normalize_query as _normalize_query
     from .cache import similarity_score as _similarity_score
@@ -105,7 +113,9 @@ class Geminoria(callbacks.Plugin):
     def __init__(self, irc):
         self.__parent = super(Geminoria, self)
         self.__parent.__init__(irc)
-        cache_db_path = conf.supybot.directories.data.dirize("Geminoria-cache.sqlite3")
+        cache_db_path = conf.supybot.directories.data.dirize(
+            "Geminoria-cache.sqlite3"
+        )
         self._service = AsyncGeminiService()
         self._core = GeminoriaCore(
             cache_db_path=cache_db_path,
@@ -129,13 +139,19 @@ class Geminoria(callbacks.Plugin):
             return
         try:
             cfg.history_tools_channel_allowlist = list(
-                self.registryValue("historyToolsChannelAllowlist", network=network)
+                self.registryValue(
+                    "historyToolsChannelAllowlist", network=network
+                )
             )
             cfg.search_last_channel_allowlist = list(
-                self.registryValue("searchLastChannelAllowlist", network=network)
+                self.registryValue(
+                    "searchLastChannelAllowlist", network=network
+                )
             )
             cfg.search_urls_channel_allowlist = list(
-                self.registryValue("searchUrlsChannelAllowlist", network=network)
+                self.registryValue(
+                    "searchUrlsChannelAllowlist", network=network
+                )
             )
         except Exception:
             return

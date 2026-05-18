@@ -18,7 +18,9 @@ class MemoryStore:
 
     @staticmethod
     def normalized_channel_set(values) -> set[str]:
-        return {str(v).strip().lower() for v in (values or []) if str(v).strip()}
+        return {
+            str(v).strip().lower() for v in (values or []) if str(v).strip()
+        }
 
     def add_message(
         self, channel: str, nick: str, text: str, buffer_size: int, url_re
@@ -72,9 +74,7 @@ class MemoryStore:
             if channel:
                 inflight = self._inflight_by_channel.get(channel, 0)
                 if inflight >= per_channel_limit:
-                    return (
-                        "Geminoria is busy in this channel. Please try again shortly."
-                    )
+                    return "Geminoria is busy in this channel. Please try again shortly."
                 self._inflight_by_channel[channel] = inflight + 1
             self._last_request_ts[prefix] = now
         return None
@@ -105,18 +105,27 @@ class MemoryStore:
                 cfg.get("history_tools_channel_allowlist")
             )
             specific_allowlist = (
-                self.normalized_channel_set(cfg.get("search_last_channel_allowlist"))
+                self.normalized_channel_set(
+                    cfg.get("search_last_channel_allowlist")
+                )
                 if tool_name == "search_last"
                 else self.normalized_channel_set(
                     cfg.get("search_urls_channel_allowlist")
                 )
             )
             effective_allowlist = specific_allowlist or general_allowlist
-            if effective_allowlist and channel.lower() not in effective_allowlist:
+            if (
+                effective_allowlist
+                and channel.lower() not in effective_allowlist
+            ):
                 return False
 
         if tool_name == "search_last":
-            return bool(channel_flag_getter("allowSearchLast", channel, network))
+            return bool(
+                channel_flag_getter("allowSearchLast", channel, network)
+            )
         if tool_name == "search_urls":
-            return bool(channel_flag_getter("allowSearchUrls", channel, network))
+            return bool(
+                channel_flag_getter("allowSearchUrls", channel, network)
+            )
         return True

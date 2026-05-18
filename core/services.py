@@ -100,7 +100,9 @@ class AsyncGeminiService(GeminiService):
         if self._client is None or self._client_api_key != api_key:
             log.debug("Geminoria: refreshing Gemini client from config.")
             self._client = _build_client(api_key)
-            self._client_api_key = api_key if self._client is not None else None
+            self._client_api_key = (
+                api_key if self._client is not None else None
+            )
         if self._client is None:
             raise RuntimeError(
                 "Geminoria: API client unavailable - check supybot.plugins.Geminoria.apiKey."
@@ -115,7 +117,9 @@ class AsyncGeminiService(GeminiService):
             )
         except RuntimeError as exc:
             # Compatibility fallback: keep responses flowing even if the async loop stalls.
-            log.warning("Geminoria: async service fallback to sync call: %s", exc)
+            log.warning(
+                "Geminoria: async service fallback to sync call: %s", exc
+            )
             return self._client.models.generate_content(
                 model=model,
                 contents=contents,

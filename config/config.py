@@ -74,7 +74,9 @@ conf.registerGlobalValue(
     "maxToolRounds",
     registry.Integer(
         3,
-        _("Maximum agentic tool-call rounds before returning a partial answer."),
+        _(
+            "Maximum agentic tool-call rounds before returning a partial answer."
+        ),
     ),
 )
 
@@ -147,7 +149,9 @@ conf.registerGlobalValue(
     "progressIndicatorEnabled",
     registry.Boolean(
         True,
-        _("Enable a delayed one-line progress indicator while Gemini is running."),
+        _(
+            "Enable a delayed one-line progress indicator while Gemini is running."
+        ),
     ),
 )
 
@@ -248,7 +252,9 @@ conf.registerGlobalValue(
     "cacheEnabled",
     registry.Boolean(
         True,
-        _("Enable SQLite query history cache for repeated Geminoria requests."),
+        _(
+            "Enable SQLite query history cache for repeated Geminoria requests."
+        ),
     ),
 )
 
@@ -284,7 +290,9 @@ conf.registerGlobalValue(
     "cacheAllowFuzzy",
     registry.Boolean(
         True,
-        _("Allow fuzzy cache matching for similar queries within the same context."),
+        _(
+            "Allow fuzzy cache matching for similar queries within the same context."
+        ),
     ),
 )
 
@@ -293,7 +301,9 @@ conf.registerGlobalValue(
     "cacheFuzzyMinScore",
     registry.Integer(
         92,
-        _("Minimum token-overlap score (0-100) for fuzzy cache hits. Higher is safer."),
+        _(
+            "Minimum token-overlap score (0-100) for fuzzy cache hits. Higher is safer."
+        ),
     ),
 )
 

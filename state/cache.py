@@ -117,7 +117,9 @@ class CacheRepository:
                     last_fts_exc: Optional[Exception] = None
                     for tokenizer in fts_tokenizers:
                         try:
-                            conn.execute("DROP TABLE IF EXISTS geminoria_cache_fts")
+                            conn.execute(
+                                "DROP TABLE IF EXISTS geminoria_cache_fts"
+                            )
                             if tokenizer is None:
                                 conn.execute("""
                                     CREATE VIRTUAL TABLE geminoria_cache_fts
@@ -172,7 +174,9 @@ class CacheRepository:
     ) -> Optional[str]:
         if not self._ready or not cfg.get("cache_enabled", True):
             return None
-        if len((query or "").strip()) < max(1, int(cfg["cache_min_query_length"])):
+        if len((query or "").strip()) < max(
+            1, int(cfg["cache_min_query_length"])
+        ):
             return None
 
         query_norm = normalize_query(query)
@@ -252,7 +256,9 @@ class CacheRepository:
                 best = None
                 best_score = -1
                 for row_id, response, cached_query_norm in fuzzy_rows:
-                    score = similarity_score(query_norm, str(cached_query_norm or ""))
+                    score = similarity_score(
+                        query_norm, str(cached_query_norm or "")
+                    )
                     if score > best_score:
                         best = (int(row_id), str(response or ""))
                         best_score = score
@@ -298,11 +304,15 @@ class CacheRepository:
     ) -> None:
         if not self._ready or not cfg.get("cache_enabled", True):
             return
-        if len((query or "").strip()) < max(1, int(cfg["cache_min_query_length"])):
+        if len((query or "").strip()) < max(
+            1, int(cfg["cache_min_query_length"])
+        ):
             return
         if not response:
             return
-        if response.startswith("Gemini error:") or response.startswith("Geminoria:"):
+        if response.startswith("Gemini error:") or response.startswith(
+            "Geminoria:"
+        ):
             return
         if response.startswith("No answer produced"):
             return
@@ -384,7 +394,9 @@ class CacheRepository:
                     )
                     lastrowid = cur.lastrowid
                     if lastrowid is None:
-                        raise RuntimeError("cache insert did not return lastrowid")
+                        raise RuntimeError(
+                            "cache insert did not return lastrowid"
+                        )
                     row_id = lastrowid
 
                 if self._has_fts:
@@ -408,7 +420,9 @@ class CacheRepository:
 
     def _prune(self, conn: sqlite3.Connection, max_entries: int) -> None:
         try:
-            row = conn.execute("SELECT COUNT(*) FROM geminoria_cache").fetchone()
+            row = conn.execute(
+                "SELECT COUNT(*) FROM geminoria_cache"
+            ).fetchone()
             total = int(row[0]) if row else 0
             if total <= max_entries:
                 return
@@ -429,7 +443,8 @@ class CacheRepository:
                 return
             placeholders = ",".join("?" for _ in stale_ids)
             conn.execute(
-                f"DELETE FROM geminoria_cache WHERE id IN ({placeholders})", stale_ids
+                f"DELETE FROM geminoria_cache WHERE id IN ({placeholders})",
+                stale_ids,
             )
             if self._has_fts:
                 conn.execute(
@@ -490,7 +505,9 @@ class CacheRepository:
         with self._lock:
             conn = sqlite3.connect(self._db_path, timeout=2.0)
             try:
-                row = conn.execute("SELECT COUNT(*) FROM geminoria_cache").fetchone()
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM geminoria_cache"
+                ).fetchone()
                 before = int(row[0]) if row else 0
                 conn.execute("DELETE FROM geminoria_cache")
                 if self._has_fts:

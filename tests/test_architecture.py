@@ -7,7 +7,11 @@ from unittest.mock import MagicMock, patch
 
 from .. import plugin
 from ..config.config_runtime import RuntimeConfig
-from ..core.core import _OUT_OF_SCOPE_REPLY, GeminoriaCore, gemversion_reply_text
+from ..core.core import (
+    _OUT_OF_SCOPE_REPLY,
+    GeminoriaCore,
+    gemversion_reply_text,
+)
 from ..core.services import AsyncGeminiService
 from ..state.cache import CacheRepository, cache_key, normalize_query
 from ..state.memory import MemoryStore
@@ -16,7 +20,8 @@ from ..state.memory import MemoryStore
 class ConfigRuntimeTestCase(unittest.TestCase):
     def test_runtime_config_coerces_defaults(self):
         cfg = RuntimeConfig(
-            progress_indicator_style="unknown", history_tools_channel_allowlist=None
+            progress_indicator_style="unknown",
+            history_tools_channel_allowlist=None,
         )
         self.assertEqual(cfg.progress_indicator_style, "dots")
         self.assertIn("progress_indicator_enabled", cfg)
@@ -108,7 +113,9 @@ class AsyncServiceTestCase(unittest.TestCase):
             def __init__(self):
                 self.models = FakeModels()
 
-        with patch("Geminoria.core.services._build_client", return_value=FakeClient()):
+        with patch(
+            "Geminoria.core.services._build_client", return_value=FakeClient()
+        ):
             svc = AsyncGeminiService()
             try:
                 out = svc.generate_content(
@@ -132,7 +139,9 @@ class CoreCompatibilityTestCase(unittest.TestCase):
         user._checkCapability.return_value = True
 
         with patch.object(
-            plugin.ircdb, "users", SimpleNamespace(getUser=MagicMock(return_value=user))
+            plugin.ircdb,
+            "users",
+            SimpleNamespace(getUser=MagicMock(return_value=user)),
         ):
             with patch.object(
                 plugin.ircdb, "checkCapability", return_value=False
@@ -165,7 +174,9 @@ class CoreCompatibilityTestCase(unittest.TestCase):
                 service=FakeService(),
                 channel_flag_getter=lambda key, channel, network: True,
             )
-            cfg = RuntimeConfig(cache_min_query_length=1, cache_prefix_hits=True)
+            cfg = RuntimeConfig(
+                cache_min_query_length=1, cache_prefix_hits=True
+            )
             core.load_cfg = lambda: cfg
             core._cache.store(
                 cfg,
@@ -230,7 +241,9 @@ class CoreCompatibilityTestCase(unittest.TestCase):
 
             def generate_content(self, **kwargs):
                 self.calls += 1
-                return SimpleNamespace(candidates=[], text="Use @config search flood")
+                return SimpleNamespace(
+                    candidates=[], text="Use @config search flood"
+                )
 
             def close(self):
                 return None
@@ -333,7 +346,9 @@ class PackageStructureTestCase(unittest.TestCase):
     def test_new_package_layout_imports(self):
         self.assertIsNotNone(importlib.import_module("Geminoria.core.core"))
         self.assertIsNotNone(importlib.import_module("Geminoria.state.cache"))
-        self.assertIsNotNone(importlib.import_module("Geminoria.config.config_runtime"))
+        self.assertIsNotNone(
+            importlib.import_module("Geminoria.config.config_runtime")
+        )
         self.assertIsNotNone(importlib.import_module("Geminoria.tests.test"))
 
     def test_legacy_import_paths_are_removed_in_phase_two(self):

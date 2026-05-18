@@ -111,7 +111,10 @@ class GeminoriaCore:
         self._channel_flag_getter = channel_flag_getter
         self._memory = MemoryStore()
         self._cache = CacheRepository(cache_db_path)
-        self._config_index: tuple[tuple[str, ...], tuple[str, ...]] = (tuple(), tuple())
+        self._config_index: tuple[tuple[str, ...], tuple[str, ...]] = (
+            tuple(),
+            tuple(),
+        )
         self._rebuild_config_index()
 
     def close(self) -> None:
@@ -241,7 +244,9 @@ class GeminoriaCore:
             log.warning("Geminoria: config index build failed: %s", exc)
             self._config_index = (tuple(), tuple())
 
-    def _search_config_live(self, word: str) -> tuple[list[str], list[str], list[str]]:
+    def _search_config_live(
+        self, word: str
+    ) -> tuple[list[str], list[str], list[str]]:
         rows: list[tuple[str, bool]] = []
         _walk_config(conf.supybot, "supybot", word, rows)
         return _partition_config_results(rows)
@@ -251,12 +256,16 @@ class GeminoriaCore:
         query = (word or "").lower()
         leaf_index, parent_index = self._config_index
         leaf_matches = [full for full in leaf_index if query in full.lower()]
-        parent_matches = [full for full in parent_index if query in full.lower()]
+        parent_matches = [
+            full for full in parent_index if query in full.lower()
+        ]
         ordered_matches = leaf_matches + parent_matches
 
         if not ordered_matches:
             try:
-                live_leaf, live_parent, live_ordered = self._search_config_live(word)
+                live_leaf, live_parent, live_ordered = (
+                    self._search_config_live(word)
+                )
                 if live_ordered:
                     leaf_matches = live_leaf
                     parent_matches = live_parent
@@ -316,7 +325,9 @@ class GeminoriaCore:
         if fn == "search_config":
             return self._tool_search_config(tool_args.get("word", ""), limit)
         if fn == "search_commands":
-            return self._tool_search_commands(irc, tool_args.get("word", ""), limit)
+            return self._tool_search_commands(
+                irc, tool_args.get("word", ""), limit
+            )
         if fn == "search_last":
             if allow_search_last and channel:
                 return self._memory.search_last(
@@ -369,7 +380,9 @@ class GeminoriaCore:
         limit = cfg.max_results
         max_rounds = cfg.max_rounds
         channel = msg.args[0] if irc.isChannel(msg.args[0]) else None
-        query_for_model = redact_sensitive(query) if cfg.redact_sensitive else query
+        query_for_model = (
+            redact_sensitive(query) if cfg.redact_sensitive else query
+        )
         network = str(getattr(irc, "network", "") or "")
         allow_search_last = self.tool_enabled(
             "search_last", channel=channel, network=network, cfg=cfg
@@ -394,7 +407,9 @@ class GeminoriaCore:
             allow_search_last=allow_search_last,
             allow_search_urls=allow_search_urls,
         )
-        tool_cfg = gen_config(tools=[tool], systemInstruction=SYSTEM_INSTRUCTION)
+        tool_cfg = gen_config(
+            tools=[tool], systemInstruction=SYSTEM_INSTRUCTION
+        )
         final_cfg = gen_config(systemInstruction=SYSTEM_INSTRUCTION)
 
         contents = [
@@ -441,7 +456,8 @@ class GeminoriaCore:
             function_calls = [
                 function_call
                 for p in parts
-                if (function_call := getattr(p, "function_call", None)) is not None
+                if (function_call := getattr(p, "function_call", None))
+                is not None
             ]
 
             log.debug(
@@ -495,7 +511,9 @@ class GeminoriaCore:
                     loggable_text(result, cfg),
                 )
                 result_for_model = (
-                    redact_sensitive(result) if cfg.redact_sensitive else result
+                    redact_sensitive(result)
+                    if cfg.redact_sensitive
+                    else result
                 )
                 collected_tool_results.append(f"{fn}: {result_for_model}")
 
@@ -543,7 +561,9 @@ class GeminoriaCore:
                 for p in list(
                     getattr(
                         getattr(
-                            (getattr(response, "candidates", None) or [None])[0],
+                            (getattr(response, "candidates", None) or [None])[
+                                0
+                            ],
                             "content",
                             None,
                         ),
@@ -590,7 +610,9 @@ class GeminoriaCore:
                 loggable_text(query, cfg),
             )
             return _OUT_OF_SCOPE_REPLY
-        channel = msg.args[0] if msg.args and irc.isChannel(msg.args[0]) else None
+        channel = (
+            msg.args[0] if msg.args and irc.isChannel(msg.args[0]) else None
+        )
         model = cfg.model
         network = str(getattr(irc, "network", "") or "")
         allow_search_last = self.tool_enabled(
@@ -599,7 +621,9 @@ class GeminoriaCore:
         allow_search_urls = self.tool_enabled(
             "search_urls", channel=channel, network=network, cfg=cfg
         )
-        query_for_cache = redact_sensitive(query) if cfg.redact_sensitive else query
+        query_for_cache = (
+            redact_sensitive(query) if cfg.redact_sensitive else query
+        )
 
         cache_started = time.monotonic()
         answer = self._cache.lookup(

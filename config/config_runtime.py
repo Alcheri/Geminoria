@@ -47,10 +47,14 @@ class RuntimeConfig:
         self.search_urls_channel_allowlist = list(
             self.search_urls_channel_allowlist or []
         )
-        self.progress_indicator_delay_ms = max(0, int(self.progress_indicator_delay_ms))
+        self.progress_indicator_delay_ms = max(
+            0, int(self.progress_indicator_delay_ms)
+        )
         self.max_reply_chars = max(0, int(self.max_reply_chars))
         style = str(self.progress_indicator_style or "").strip().lower()
-        self.progress_indicator_style = style if style in ("dots", "plain") else "dots"
+        self.progress_indicator_style = (
+            style if style in ("dots", "plain") else "dots"
+        )
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -93,7 +97,9 @@ def load_runtime_config() -> RuntimeConfig:
             progress_indicator_delay_ms=int(p.progressIndicatorDelayMs()),
             progress_indicator_style=str(p.progressIndicatorStyle()),
             progress_indicator_message=str(p.progressIndicatorMessage()),
-            history_tools_channel_allowlist=list(p.historyToolsChannelAllowlist()),
+            history_tools_channel_allowlist=list(
+                p.historyToolsChannelAllowlist()
+            ),
             search_last_channel_allowlist=list(p.searchLastChannelAllowlist()),
             search_urls_channel_allowlist=list(p.searchUrlsChannelAllowlist()),
             cache_enabled=bool(p.cacheEnabled()),

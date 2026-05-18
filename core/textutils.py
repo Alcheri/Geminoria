@@ -85,7 +85,9 @@ def progress_indicator_text(cfg: Any) -> str:
     if custom:
         return sanitize_irc_text(custom)
 
-    style = normalized_progress_style(str(cfg.get("progress_indicator_style", "dots")))
+    style = normalized_progress_style(
+        str(cfg.get("progress_indicator_style", "dots"))
+    )
     if cfg.get("disable_ansi", False):
         return "Geminoria is thinking ..."
 
@@ -106,7 +108,9 @@ def run_with_delayed_indicator(run_fn, indicator_fn, delay_ms: int):
         finally:
             done.set()
 
-    thread = threading.Thread(target=worker, name="GeminoriaRunWorker", daemon=True)
+    thread = threading.Thread(
+        target=worker, name="GeminoriaRunWorker", daemon=True
+    )
     thread.start()
 
     wait_seconds = max(0, int(delay_ms)) / 1000.0

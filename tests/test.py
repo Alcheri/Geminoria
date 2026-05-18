@@ -110,7 +110,9 @@ class GeminoriaProgressConfigTestCase(unittest.TestCase):
     def test_progress_style_fallback(self):
         self.assertEqual(plugin._normalized_progress_style("plain"), "plain")
         self.assertEqual(plugin._normalized_progress_style("dots"), "dots")
-        self.assertEqual(plugin._normalized_progress_style("unknown-style"), "dots")
+        self.assertEqual(
+            plugin._normalized_progress_style("unknown-style"), "dots"
+        )
 
 
 class GeminoriaCapabilityTestCase(unittest.TestCase):
@@ -121,7 +123,9 @@ class GeminoriaCapabilityTestCase(unittest.TestCase):
         user._checkCapability.return_value = True
 
         with patch.object(
-            plugin.ircdb, "users", SimpleNamespace(getUser=MagicMock(return_value=user))
+            plugin.ircdb,
+            "users",
+            SimpleNamespace(getUser=MagicMock(return_value=user)),
         ):
             with patch.object(
                 plugin.ircdb, "checkCapability", return_value=False
