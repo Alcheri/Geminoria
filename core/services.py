@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import threading
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import supybot.log as log
 
@@ -53,47 +53,58 @@ def _coerce_timeout_seconds(timeout_s: float) -> float:
 
 
 class AsyncGeminiService(GeminiService):
-    """Runs blocking Gemini SDK calls on a dedicated asyncio loop thread."""
+    """Runs blocking Gemini SDK calls away from Limnoria's IRC thread."""
 
     def __init__(self) -> None:
-        self._loop = asyncio.new_event_loop()
-        self._loop_ready = threading.Event()
-        self._loop_thread = threading.Thread(
-            target=self._run_loop,
-            name="GeminoriaAsyncServiceLoop",
-            daemon=True,
-        )
-        self._loop_thread.start()
-        self._loop_ready.wait(timeout=2)
+        self._lock = threading.Lock()
+        self._executor = self._new_executor()
         self._client: Optional[genai.Client] = None
         self._client_api_key: Optional[str] = None
+        self._closed = False
 
-    def _run_loop(self) -> None:
-        asyncio.set_event_loop(self._loop)
-        self._loop_ready.set()
-        self._loop.run_forever()
+    @staticmethod
+    def _new_executor() -> ThreadPoolExecutor:
+        return ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="GeminoriaAsyncService",
+        )
 
-    def _run_coro_threadsafe(self, coro, timeout_s: float):
-        if self._loop.is_closed():
-            raise RuntimeError("Geminoria async service loop is closed.")
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+    def _run_blocking(self, func: Callable[[], Any], timeout_s: float) -> Any:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Geminoria async service is closed.")
+            executor = self._executor
+            future = executor.submit(func)
         try:
             return future.result(timeout=timeout_s)
         except FutureTimeoutError as exc:
             future.cancel()
+            self._recover_after_timeout(executor)
             raise TimeoutError("Gemini request timed out.") from exc
 
-    async def _generate_content_async(
-        self, *, model: str, contents: list[Any], config: Any
+    def _generate_content(
+        self,
+        *,
+        client: genai.Client,
+        model: str,
+        contents: list[Any],
+        config: Any,
     ) -> Any:
-        if self._client is None:
-            raise RuntimeError("Gemini client is unavailable.")
-        return await asyncio.to_thread(
-            self._client.models.generate_content,
+        return client.models.generate_content(
             model=model,
             contents=contents,
             config=config,
         )
+
+    def _recover_after_timeout(
+        self, timed_out_executor: ThreadPoolExecutor
+    ) -> None:
+        with self._lock:
+            if self._executor is timed_out_executor and not self._closed:
+                self._executor = self._new_executor()
+                self._client = None
+                self._client_api_key = None
+        timed_out_executor.shutdown(wait=False, cancel_futures=True)
 
     def generate_content(
         self,
@@ -104,19 +115,22 @@ class AsyncGeminiService(GeminiService):
         config: Any,
         timeout_s: float = 120.0,
     ) -> Any:
-        if self._client is None or self._client_api_key != api_key:
-            log.debug("Geminoria: refreshing Gemini client from config.")
-            self._client = _build_client(api_key)
-            self._client_api_key = (
-                api_key if self._client is not None else None
-            )
-        if self._client is None:
+        with self._lock:
+            if self._client is None or self._client_api_key != api_key:
+                log.debug("Geminoria: refreshing Gemini client from config.")
+                self._client = _build_client(api_key)
+                self._client_api_key = (
+                    api_key if self._client is not None else None
+                )
+            client = self._client
+        if client is None:
             raise RuntimeError(
                 "Geminoria: API client unavailable - check supybot.plugins.Geminoria.apiKey."
             )
 
-        return self._run_coro_threadsafe(
-            self._generate_content_async(
+        return self._run_blocking(
+            lambda: self._generate_content(
+                client=client,
                 model=model,
                 contents=contents,
                 config=config,
@@ -125,11 +139,9 @@ class AsyncGeminiService(GeminiService):
         )
 
     def close(self) -> None:
-        if self._loop.is_closed():
-            return
-        self._loop.call_soon_threadsafe(self._loop.stop)
-        self._loop_thread.join(timeout=5)
-        if self._loop.is_running():
-            log.warning("Geminoria: async service loop did not stop cleanly.")
-            return
-        self._loop.close()
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            executor = self._executor
+        executor.shutdown(wait=False, cancel_futures=True)

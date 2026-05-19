@@ -13,7 +13,7 @@ from pathlib import Path
 import supybot.conf as conf
 import supybot.ircdb as ircdb
 import supybot.log as log
-from supybot import callbacks
+from supybot import callbacks, ircmsgs
 from supybot.commands import wrap
 
 from . import __version__ as PLUGIN_VERSION
@@ -296,7 +296,7 @@ class Geminoria(callbacks.Plugin):
         if not self._check_owner(msg):
             irc.errorNoCapability("owner", prefixNick=False)
             return
-        irc.reply(_gemdiag_reply_text(), prefixNick=False)
+        irc.queueMsg(ircmsgs.notice(msg.nick, _gemdiag_reply_text()))
 
     gemdiag = wrap(gemdiag)
 

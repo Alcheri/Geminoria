@@ -60,6 +60,8 @@ This beta introduces a major architectural upgrade to Geminoria, shifting from e
 - Isolated in-memory `search_last` and `search_urls` history by IRC network and channel, preventing duplicate channel names such as `#Borg` on different networks from sharing recent messages or URLs.
 - Scoped per-channel in-flight request limits by IRC network and channel.
 - Removed the unbounded synchronous Gemini SDK fallback after async request timeout.
+- Reworked Gemini SDK execution so a timed-out worker is replaced before later requests run.
+- Changed owner-only `gemdiag` diagnostics to send via NOTICE instead of channel reply.
 - Added central runtime clamps for numeric settings such as tool result count, history buffer size, tool rounds, cooldown, concurrency, cache size, cache TTL, and fuzzy-cache score.
 - Added regression coverage for duplicate-channel network isolation, network-scoped request slots, timeout behaviour, and runtime numeric bounds.
 

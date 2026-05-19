@@ -255,6 +255,48 @@ class AsyncServiceTestCase(unittest.TestCase):
             finally:
                 svc.close()
 
+    def test_async_service_recovers_after_timeout(self):
+        class FakeModels:
+            def __init__(self):
+                self.calls = 0
+
+            def generate_content(self, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    time.sleep(0.05)
+                return {"ok": True, "model": kwargs["model"]}
+
+        class FakeClient:
+            def __init__(self):
+                self.models = FakeModels()
+
+        fake_client = FakeClient()
+        with patch(
+            "Geminoria.core.services._build_client",
+            return_value=fake_client,
+        ):
+            svc = AsyncGeminiService()
+            try:
+                with self.assertRaises(TimeoutError):
+                    svc.generate_content(
+                        api_key="k",
+                        model="gemini-test",
+                        contents=[],
+                        config=None,
+                        timeout_s=0.001,
+                    )
+                out = svc.generate_content(
+                    api_key="k",
+                    model="gemini-test",
+                    contents=[],
+                    config=None,
+                    timeout_s=5,
+                )
+                self.assertEqual(out["model"], "gemini-test")
+                self.assertGreaterEqual(fake_client.models.calls, 2)
+            finally:
+                svc.close()
+
 
 class CoreCompatibilityTestCase(unittest.TestCase):
     def test_plugin_check_owner_falls_back_when_core_helper_is_missing(self):

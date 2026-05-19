@@ -35,6 +35,21 @@ class GeminoriaSmokeTestCase(unittest.TestCase):
         self.assertIn("core: ", text)
         self.assertIn("runtime: ", text)
 
+    def test_gemdiag_uses_notice(self):
+        geminoria = plugin.Geminoria.__new__(plugin.Geminoria)
+        geminoria._check_owner = MagicMock(return_value=True)
+        geminoria.log = MagicMock()
+        irc = SimpleNamespace(queueMsg=MagicMock())
+        msg = SimpleNamespace(args=[], nick="OwnerNick")
+
+        with patch.object(plugin, "_gemdiag_reply_text", return_value="diag"):
+            plugin.Geminoria.gemdiag(geminoria, irc, msg, None)
+
+        irc.queueMsg.assert_called_once()
+        notice = irc.queueMsg.call_args.args[0]
+        self.assertEqual(notice.command, "NOTICE")
+        self.assertEqual(notice.args, ("OwnerNick", "diag"))
+
 
 class GeminoriaCacheHelperTestCase(unittest.TestCase):
     def test_normalize_query(self):
