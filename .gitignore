@@ -8,6 +8,9 @@ CACHEDIR.TAG
 # Codex files
 *.codex
 
+# Local workspace notes
+Documents/
+
 # Virtual environments
 .venv/
 venv/
