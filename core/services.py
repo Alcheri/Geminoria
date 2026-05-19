@@ -25,7 +25,7 @@ class GeminiService(ABC):
         model: str,
         contents: list[Any],
         config: Any,
-        timeout_s: int = 120,
+        timeout_s: float = 120.0,
     ) -> Any:
         raise NotImplementedError
 
@@ -43,6 +43,13 @@ def _build_client(api_key: str) -> Optional[genai.Client]:
     except Exception as exc:
         log.error("Geminoria: failed to initialise Gemini client: %s", exc)
         return None
+
+
+def _coerce_timeout_seconds(timeout_s: float) -> float:
+    try:
+        return max(0.001, float(timeout_s))
+    except (TypeError, ValueError):
+        return 120.0
 
 
 class AsyncGeminiService(GeminiService):
@@ -66,7 +73,7 @@ class AsyncGeminiService(GeminiService):
         self._loop_ready.set()
         self._loop.run_forever()
 
-    def _run_coro_threadsafe(self, coro, timeout_s: int):
+    def _run_coro_threadsafe(self, coro, timeout_s: float):
         if self._loop.is_closed():
             raise RuntimeError("Geminoria async service loop is closed.")
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
@@ -74,7 +81,7 @@ class AsyncGeminiService(GeminiService):
             return future.result(timeout=timeout_s)
         except FutureTimeoutError as exc:
             future.cancel()
-            raise RuntimeError("Gemini request timed out.") from exc
+            raise TimeoutError("Gemini request timed out.") from exc
 
     async def _generate_content_async(
         self, *, model: str, contents: list[Any], config: Any
@@ -95,7 +102,7 @@ class AsyncGeminiService(GeminiService):
         model: str,
         contents: list[Any],
         config: Any,
-        timeout_s: int = 120,
+        timeout_s: float = 120.0,
     ) -> Any:
         if self._client is None or self._client_api_key != api_key:
             log.debug("Geminoria: refreshing Gemini client from config.")
@@ -108,23 +115,14 @@ class AsyncGeminiService(GeminiService):
                 "Geminoria: API client unavailable - check supybot.plugins.Geminoria.apiKey."
             )
 
-        try:
-            return self._run_coro_threadsafe(
-                self._generate_content_async(
-                    model=model, contents=contents, config=config
-                ),
-                timeout_s=max(1, int(timeout_s)),
-            )
-        except RuntimeError as exc:
-            # Compatibility fallback: keep responses flowing even if the async loop stalls.
-            log.warning(
-                "Geminoria: async service fallback to sync call: %s", exc
-            )
-            return self._client.models.generate_content(
+        return self._run_coro_threadsafe(
+            self._generate_content_async(
                 model=model,
                 contents=contents,
                 config=config,
-            )
+            ),
+            timeout_s=_coerce_timeout_seconds(timeout_s),
+        )
 
     def close(self) -> None:
         if self._loop.is_closed():

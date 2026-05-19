@@ -30,7 +30,6 @@ try:
     from .core.textutils import (
         progress_indicator_text as _progress_indicator_text,
     )
-    from .core.textutils import redact_sensitive as _redact_sensitive
     from .core.textutils import (
         run_with_delayed_indicator as _run_with_delayed_indicator,
     )
@@ -47,13 +46,20 @@ except Exception:  # pragma: no cover - deployment compatibility fallback.
         normalized_progress_style as _normalized_progress_style,
     )
     from .textutils import progress_indicator_text as _progress_indicator_text
-    from .textutils import redact_sensitive as _redact_sensitive
     from .textutils import (
         run_with_delayed_indicator as _run_with_delayed_indicator,
     )
     from .cache import cache_key as _cache_key
     from .cache import normalize_query as _normalize_query
     from .cache import similarity_score as _similarity_score
+
+_COMPAT_HELPERS = (
+    _cache_key,
+    _normalize_query,
+    _normalized_progress_style,
+    _run_with_delayed_indicator,
+    _similarity_score,
+)
 
 
 def _get_cfg():
@@ -173,11 +179,13 @@ class Geminoria(callbacks.Plugin):
             return bool(check_owner(msg))
         return _check_user_capability(msg, "owner")
 
-    def _acquire_request_slot(self, msg, cfg):
-        return self._core.acquire_request_slot(msg, cfg)
+    def _acquire_request_slot(self, irc, msg, cfg):
+        network = str(getattr(irc, "network", "") or "")
+        return self._core.acquire_request_slot(msg, cfg, network=network)
 
-    def _release_request_slot(self, msg):
-        self._core.release_request_slot(msg)
+    def _release_request_slot(self, irc, msg):
+        network = str(getattr(irc, "network", "") or "")
+        self._core.release_request_slot(msg, network=network)
 
     def _tool_enabled(self, tool_name: str, channel, irc, cfg) -> bool:
         self._apply_network_allowlists(
@@ -217,7 +225,7 @@ class Geminoria(callbacks.Plugin):
             irc.errorNoCapability(cfg.required_cap, prefixNick=False)
             return
 
-        slot_error = self._acquire_request_slot(msg, cfg)
+        slot_error = self._acquire_request_slot(irc, msg, cfg)
         if slot_error:
             irc.reply(slot_error, prefixNick=False)
             return
@@ -230,7 +238,7 @@ class Geminoria(callbacks.Plugin):
                 emit_progress=lambda: self._emit_progress_indicator(irc, cfg),
             )
         finally:
-            self._release_request_slot(msg)
+            self._release_request_slot(irc, msg)
 
         irc.reply(answer, prefixNick=False)
 

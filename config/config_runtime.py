@@ -8,6 +8,14 @@ from typing import Any
 import supybot.conf as conf
 
 
+def _clamp_int(value: int, *, minimum: int, maximum: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = minimum
+    return min(max(number, minimum), maximum)
+
+
 @dataclass
 class RuntimeConfig:
     api_key: str = ""
@@ -51,6 +59,27 @@ class RuntimeConfig:
             0, int(self.progress_indicator_delay_ms)
         )
         self.max_reply_chars = max(0, int(self.max_reply_chars))
+        self.max_results = _clamp_int(self.max_results, minimum=1, maximum=25)
+        self.buffer_size = _clamp_int(self.buffer_size, minimum=1, maximum=500)
+        self.max_rounds = _clamp_int(self.max_rounds, minimum=1, maximum=10)
+        self.cooldown_seconds = _clamp_int(
+            self.cooldown_seconds, minimum=0, maximum=86400
+        )
+        self.max_concurrent_per_channel = _clamp_int(
+            self.max_concurrent_per_channel, minimum=1, maximum=10
+        )
+        self.cache_ttl_seconds = _clamp_int(
+            self.cache_ttl_seconds, minimum=0, maximum=2592000
+        )
+        self.cache_max_entries = _clamp_int(
+            self.cache_max_entries, minimum=1, maximum=50000
+        )
+        self.cache_min_query_length = _clamp_int(
+            self.cache_min_query_length, minimum=1, maximum=500
+        )
+        self.cache_fuzzy_min_score = _clamp_int(
+            self.cache_fuzzy_min_score, minimum=0, maximum=100
+        )
         style = str(self.progress_indicator_style or "").strip().lower()
         self.progress_indicator_style = (
             style if style in ("dots", "plain") else "dots"

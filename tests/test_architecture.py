@@ -1,6 +1,8 @@
 import importlib
 from pathlib import Path
+import re
 import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -27,8 +29,69 @@ class ConfigRuntimeTestCase(unittest.TestCase):
         self.assertIn("progress_indicator_enabled", cfg)
         self.assertEqual(cfg["model"], "gemini-3-flash-preview")
 
+    def test_runtime_config_clamps_numeric_bounds(self):
+        cfg = RuntimeConfig(
+            max_results=0,
+            buffer_size=0,
+            max_rounds=0,
+            cooldown_seconds=-5,
+            max_concurrent_per_channel=0,
+            cache_ttl_seconds=-1,
+            cache_max_entries=0,
+            cache_min_query_length=0,
+            cache_fuzzy_min_score=101,
+        )
+
+        self.assertEqual(cfg.max_results, 1)
+        self.assertEqual(cfg.buffer_size, 1)
+        self.assertEqual(cfg.max_rounds, 1)
+        self.assertEqual(cfg.cooldown_seconds, 0)
+        self.assertEqual(cfg.max_concurrent_per_channel, 1)
+        self.assertEqual(cfg.cache_ttl_seconds, 0)
+        self.assertEqual(cfg.cache_max_entries, 1)
+        self.assertEqual(cfg.cache_min_query_length, 1)
+        self.assertEqual(cfg.cache_fuzzy_min_score, 100)
+
 
 class MemoryStoreTestCase(unittest.TestCase):
+    def test_history_buffers_are_isolated_by_network_and_channel(self):
+        store = MemoryStore()
+        url_re = re.compile(r"https?://\S+", re.IGNORECASE)
+        store.add_message(
+            "#Borg",
+            "alice",
+            "limnoria dalnet note https://dalnet.example/item",
+            10,
+            url_re,
+            network="DALnet",
+        )
+        store.add_message(
+            "#Borg",
+            "bob",
+            "limnoria libera note https://libera.example/item",
+            10,
+            url_re,
+            network="Libera",
+        )
+
+        dalnet = store.search_last("#Borg", "limnoria", 5, network="DALnet")
+        libera = store.search_last("#Borg", "limnoria", 5, network="Libera")
+        dalnet_urls = store.search_urls(
+            "#Borg", "example", 5, network="DALnet"
+        )
+        libera_urls = store.search_urls(
+            "#Borg", "example", 5, network="Libera"
+        )
+
+        self.assertIn("dalnet note", dalnet)
+        self.assertNotIn("libera note", dalnet)
+        self.assertIn("libera note", libera)
+        self.assertNotIn("dalnet note", libera)
+        self.assertIn("dalnet.example", dalnet_urls)
+        self.assertNotIn("libera.example", dalnet_urls)
+        self.assertIn("libera.example", libera_urls)
+        self.assertNotIn("dalnet.example", libera_urls)
+
     def test_request_slot_cooldown_and_release(self):
         store = MemoryStore()
         err = store.acquire_request_slot(
@@ -46,6 +109,36 @@ class MemoryStoreTestCase(unittest.TestCase):
         )
         self.assertIn("Please wait", err2)
         store.release_request_slot("#ops")
+
+    def test_request_slot_inflight_limit_is_network_scoped(self):
+        store = MemoryStore()
+        first = store.acquire_request_slot(
+            prefix="nick1!user@host",
+            channel="#Borg",
+            network="DALnet",
+            cooldown_seconds=0,
+            max_concurrent_per_channel=1,
+        )
+        second_same_network = store.acquire_request_slot(
+            prefix="nick2!user@host",
+            channel="#Borg",
+            network="DALnet",
+            cooldown_seconds=0,
+            max_concurrent_per_channel=1,
+        )
+        second_other_network = store.acquire_request_slot(
+            prefix="nick3!user@host",
+            channel="#Borg",
+            network="Libera",
+            cooldown_seconds=0,
+            max_concurrent_per_channel=1,
+        )
+
+        self.assertIsNone(first)
+        self.assertIn("busy", second_same_network)
+        self.assertIsNone(second_other_network)
+        store.release_request_slot("#Borg", network="DALnet")
+        store.release_request_slot("#Borg", network="Libera")
 
 
 class CacheRepositoryTestCase(unittest.TestCase):
@@ -129,6 +222,39 @@ class AsyncServiceTestCase(unittest.TestCase):
             finally:
                 svc.close()
 
+    def test_async_service_timeout_does_not_sync_fallback(self):
+        class FakeModels:
+            def __init__(self):
+                self.calls = 0
+
+            def generate_content(self, **kwargs):
+                self.calls += 1
+                time.sleep(0.05)
+                return {"ok": True, "model": kwargs["model"]}
+
+        class FakeClient:
+            def __init__(self):
+                self.models = FakeModels()
+
+        fake_client = FakeClient()
+        with patch(
+            "Geminoria.core.services._build_client",
+            return_value=fake_client,
+        ):
+            svc = AsyncGeminiService()
+            try:
+                with self.assertRaises(TimeoutError):
+                    svc.generate_content(
+                        api_key="k",
+                        model="gemini-test",
+                        contents=[],
+                        config=None,
+                        timeout_s=0.001,
+                    )
+                self.assertEqual(fake_client.models.calls, 1)
+            finally:
+                svc.close()
+
 
 class CoreCompatibilityTestCase(unittest.TestCase):
     def test_plugin_check_owner_falls_back_when_core_helper_is_missing(self):
@@ -192,6 +318,75 @@ class CoreCompatibilityTestCase(unittest.TestCase):
                 FakeIrc(), msg, "limnoria hello", emit_progress=lambda: None
             )
             self.assertTrue(answer.startswith("[cached]"))
+
+    def test_core_history_tools_use_irc_network(self):
+        class FakeService:
+            def close(self):
+                return None
+
+        class FakeIrc:
+            callbacks = []
+
+            def __init__(self, network):
+                self.network = network
+
+            @staticmethod
+            def isChannel(value):
+                return bool(value and value.startswith("#"))
+
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3") as tmp:
+            core = GeminoriaCore(
+                cache_db_path=tmp.name,
+                service=FakeService(),
+                channel_flag_getter=lambda key, channel, network: True,
+            )
+            cfg = RuntimeConfig(buffer_size=10)
+            core.on_privmsg(
+                FakeIrc("DALnet"),
+                SimpleNamespace(
+                    nick="alice",
+                    args=[
+                        "#Borg",
+                        "limnoria dalnet note https://dalnet.example/item",
+                    ],
+                ),
+                cfg,
+            )
+            core.on_privmsg(
+                FakeIrc("Libera"),
+                SimpleNamespace(
+                    nick="bob",
+                    args=[
+                        "#Borg",
+                        "limnoria libera note https://libera.example/item",
+                    ],
+                ),
+                cfg,
+            )
+
+            dalnet = core._execute_tool(
+                irc=FakeIrc("DALnet"),
+                channel="#Borg",
+                fn="search_last",
+                tool_args={"text": "limnoria"},
+                limit=5,
+                allow_search_last=True,
+                allow_search_urls=True,
+            )
+            libera_urls = core._execute_tool(
+                irc=FakeIrc("Libera"),
+                channel="#Borg",
+                fn="search_urls",
+                tool_args={"word": "example"},
+                limit=5,
+                allow_search_last=True,
+                allow_search_urls=True,
+            )
+
+        self.assertIn("dalnet note", dalnet)
+        self.assertNotIn("libera note", dalnet)
+        self.assertIn("libera.example", libera_urls)
+        self.assertNotIn("dalnet.example", libera_urls)
 
     def test_gemversion_text_format(self):
         text = gemversion_reply_text()

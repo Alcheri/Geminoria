@@ -7,13 +7,15 @@ import time
 from collections import deque
 from typing import Callable, Optional
 
+HistoryKey = tuple[str, str]
+
 
 class MemoryStore:
     def __init__(self) -> None:
-        self._msg_buf: dict[str, deque] = {}
-        self._url_buf: dict[str, deque] = {}
+        self._msg_buf: dict[HistoryKey, deque] = {}
+        self._url_buf: dict[HistoryKey, deque] = {}
         self._last_request_ts: dict[str, float] = {}
-        self._inflight_by_channel: dict[str, int] = {}
+        self._inflight_by_channel: dict[HistoryKey, int] = {}
         self._state_lock = threading.Lock()
 
     @staticmethod
@@ -22,18 +24,39 @@ class MemoryStore:
             str(v).strip().lower() for v in (values or []) if str(v).strip()
         }
 
+    @staticmethod
+    def _context_key(network: Optional[str], channel: str) -> HistoryKey:
+        return (
+            str(network or "").strip().lower(),
+            str(channel or "").strip().lower(),
+        )
+
     def add_message(
-        self, channel: str, nick: str, text: str, buffer_size: int, url_re
+        self,
+        channel: str,
+        nick: str,
+        text: str,
+        buffer_size: int,
+        url_re,
+        network: Optional[str] = None,
     ) -> None:
-        buf = self._msg_buf.setdefault(channel, deque(maxlen=buffer_size))
+        key = self._context_key(network, channel)
+        buf = self._msg_buf.setdefault(key, deque(maxlen=buffer_size))
         buf.append((nick, text))
 
         for url in url_re.findall(text):
-            ubuf = self._url_buf.setdefault(channel, deque(maxlen=buffer_size))
+            ubuf = self._url_buf.setdefault(key, deque(maxlen=buffer_size))
             ubuf.append((nick, url))
 
-    def search_last(self, channel: str, text: str, limit: int) -> str:
-        buf = list(self._msg_buf.get(channel, []))
+    def search_last(
+        self,
+        channel: str,
+        text: str,
+        limit: int,
+        network: Optional[str] = None,
+    ) -> str:
+        key = self._context_key(network, channel)
+        buf = list(self._msg_buf.get(key, []))
         matches = [
             f"{nick}: {msg}"
             for nick, msg in reversed(buf)
@@ -43,8 +66,15 @@ class MemoryStore:
             return f"No recent messages found containing '{text}'."
         return "  ||  ".join(matches)
 
-    def search_urls(self, channel: str, word: str, limit: int) -> str:
-        buf = list(self._url_buf.get(channel, []))
+    def search_urls(
+        self,
+        channel: str,
+        word: str,
+        limit: int,
+        network: Optional[str] = None,
+    ) -> str:
+        key = self._context_key(network, channel)
+        buf = list(self._url_buf.get(key, []))
         matches = [
             f"{nick}: {url}"
             for nick, url in reversed(buf)
@@ -59,6 +89,7 @@ class MemoryStore:
         *,
         prefix: str,
         channel: Optional[str],
+        network: Optional[str] = None,
         cooldown_seconds: int,
         max_concurrent_per_channel: int,
     ) -> Optional[str]:
@@ -72,22 +103,26 @@ class MemoryStore:
                 return f"Please wait {remaining}s before using gemini again."
 
             if channel:
-                inflight = self._inflight_by_channel.get(channel, 0)
+                key = self._context_key(network, channel)
+                inflight = self._inflight_by_channel.get(key, 0)
                 if inflight >= per_channel_limit:
                     return "Geminoria is busy in this channel. Please try again shortly."
-                self._inflight_by_channel[channel] = inflight + 1
+                self._inflight_by_channel[key] = inflight + 1
             self._last_request_ts[prefix] = now
         return None
 
-    def release_request_slot(self, channel: Optional[str]) -> None:
+    def release_request_slot(
+        self, channel: Optional[str], network: Optional[str] = None
+    ) -> None:
         if not channel:
             return
+        key = self._context_key(network, channel)
         with self._state_lock:
-            inflight = self._inflight_by_channel.get(channel, 0)
+            inflight = self._inflight_by_channel.get(key, 0)
             if inflight <= 1:
-                self._inflight_by_channel.pop(channel, None)
+                self._inflight_by_channel.pop(key, None)
             else:
-                self._inflight_by_channel[channel] = inflight - 1
+                self._inflight_by_channel[key] = inflight - 1
 
     def tool_enabled(
         self,

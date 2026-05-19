@@ -5,7 +5,9 @@ try:
 
     _ = PluginInternationalization("Geminoria")
 except Exception:
-    _ = lambda x: x
+
+    def _(x):
+        return x
 
 
 def configure(advanced):

@@ -129,12 +129,14 @@ class GeminoriaCore:
             return
         nick = msg.nick
         text = msg.args[1]
+        network = str(getattr(irc, "network", "") or "")
         self._memory.add_message(
             channel,
             nick,
             text,
             int(cfg.buffer_size),
             re.compile(r"https?://\S+", re.IGNORECASE),
+            network=network,
         )
 
     def _check_user_capability(self, msg, capability: str) -> bool:
@@ -195,7 +197,9 @@ class GeminoriaCore:
             channel_flag_getter=self._channel_flag_getter,
         )
 
-    def acquire_request_slot(self, msg, cfg: RuntimeConfig) -> Optional[str]:
+    def acquire_request_slot(
+        self, msg, cfg: RuntimeConfig, network: Optional[str] = None
+    ) -> Optional[str]:
         channel = (
             msg.args[0]
             if msg.args and msg.args[0] and msg.args[0][0] in "#&+!"
@@ -204,17 +208,18 @@ class GeminoriaCore:
         return self._memory.acquire_request_slot(
             prefix=msg.prefix,
             channel=channel,
+            network=network,
             cooldown_seconds=int(cfg.cooldown_seconds),
             max_concurrent_per_channel=int(cfg.max_concurrent_per_channel),
         )
 
-    def release_request_slot(self, msg) -> None:
+    def release_request_slot(self, msg, network: Optional[str] = None) -> None:
         channel = (
             msg.args[0]
             if msg.args and msg.args[0] and msg.args[0][0] in "#&+!"
             else None
         )
-        self._memory.release_request_slot(channel)
+        self._memory.release_request_slot(channel, network=network)
 
     def cache_stats(self, cfg: RuntimeConfig) -> str:
         return self._cache.stats(cfg)
@@ -322,6 +327,7 @@ class GeminoriaCore:
         allow_search_last: bool,
         allow_search_urls: bool,
     ) -> str:
+        network = str(getattr(irc, "network", "") or "")
         if fn == "search_config":
             return self._tool_search_config(tool_args.get("word", ""), limit)
         if fn == "search_commands":
@@ -331,13 +337,19 @@ class GeminoriaCore:
         if fn == "search_last":
             if allow_search_last and channel:
                 return self._memory.search_last(
-                    channel, tool_args.get("text", ""), limit
+                    channel,
+                    tool_args.get("text", ""),
+                    limit,
+                    network=network,
                 )
             return "search_last is disabled for this context."
         if fn == "search_urls":
             if allow_search_urls and channel:
                 return self._memory.search_urls(
-                    channel, tool_args.get("word", ""), limit
+                    channel,
+                    tool_args.get("word", ""),
+                    limit,
+                    network=network,
                 )
             return "search_urls is disabled for this context."
         return f"Unknown tool: {fn}"
