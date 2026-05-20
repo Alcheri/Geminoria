@@ -181,11 +181,21 @@ class Geminoria(callbacks.Plugin):
 
     def _acquire_request_slot(self, irc, msg, cfg):
         network = str(getattr(irc, "network", "") or "")
-        return self._core.acquire_request_slot(msg, cfg, network=network)
+        try:
+            return self._core.acquire_request_slot(msg, cfg, network=network)
+        except TypeError as exc:
+            if "unexpected keyword argument 'network'" not in str(exc):
+                raise
+            return self._core.acquire_request_slot(msg, cfg)
 
     def _release_request_slot(self, irc, msg):
         network = str(getattr(irc, "network", "") or "")
-        self._core.release_request_slot(msg, network=network)
+        try:
+            self._core.release_request_slot(msg, network=network)
+        except TypeError as exc:
+            if "unexpected keyword argument 'network'" not in str(exc):
+                raise
+            self._core.release_request_slot(msg)
 
     def _tool_enabled(self, tool_name: str, channel, irc, cfg) -> bool:
         self._apply_network_allowlists(

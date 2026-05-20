@@ -299,6 +299,46 @@ class AsyncServiceTestCase(unittest.TestCase):
 
 
 class CoreCompatibilityTestCase(unittest.TestCase):
+    def test_plugin_acquire_request_slot_falls_back_when_core_lacks_network(
+        self,
+    ):
+        class OldCore:
+            def __init__(self):
+                self.calls = []
+
+            def acquire_request_slot(self, msg, cfg):
+                self.calls.append((msg, cfg))
+                return None
+
+        core = OldCore()
+        geminoria = plugin.Geminoria.__new__(plugin.Geminoria)
+        geminoria._core = core
+        irc = SimpleNamespace(network="BorgNet")
+        msg = SimpleNamespace()
+        cfg = object()
+
+        self.assertIsNone(geminoria._acquire_request_slot(irc, msg, cfg))
+        self.assertEqual(core.calls, [(msg, cfg)])
+
+    def test_plugin_release_request_slot_falls_back_when_core_lacks_network(
+        self,
+    ):
+        class OldCore:
+            def __init__(self):
+                self.calls = []
+
+            def release_request_slot(self, msg):
+                self.calls.append(msg)
+
+        core = OldCore()
+        geminoria = plugin.Geminoria.__new__(plugin.Geminoria)
+        geminoria._core = core
+        irc = SimpleNamespace(network="BorgNet")
+        msg = SimpleNamespace()
+
+        geminoria._release_request_slot(irc, msg)
+        self.assertEqual(core.calls, [msg])
+
     def test_plugin_check_owner_falls_back_when_core_helper_is_missing(self):
         geminoria = plugin.Geminoria.__new__(plugin.Geminoria)
         geminoria._core = object()
