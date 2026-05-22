@@ -4,9 +4,13 @@
 
 A Gemini-powered agentic search plugin for [Limnoria](https://github.com/progval/Limnoria).
 
-[![Tests](https://github.com/Alcheri/Geminoria/actions/workflows/tests.yml/badge.svg)](https://github.com/Alcheri/Geminoria/actions/workflows/tests.yml) [![Lint](https://github.com/Alcheri/Geminoria/actions/workflows/lint.yml/badge.svg)](https://github.com/Alcheri/Geminoria/actions/workflows/lint.yml) [![CodeQL](https://github.com/Alcheri/Geminoria/actions/workflows/codeql.yml/badge.svg)](https://github.com/Alcheri/Geminoria/security/code-scanning)
-[![Powered by Gemini](https://img.shields.io/badge/Powered%20by-Gemini-3D5AFE?logo=google&logoColor=FFFFFF&labelColor=00ACC1&color=5E35B1)](https://ai.google.dev/)
-[![Limnoria Compatible](https://img.shields.io/badge/limnoria-compatible-brightgreen.svg)](https://github.com/progval/Limnoria)
+<!-- README_HEADER:start -->
+[![Tests][tests-badge]][tests-link]
+[![Lint][lint-badge]][lint-link]
+[![CodeQL][codeql-badge]][codeql-link]
+[![Powered by Gemini][gemini-badge]][gemini-link]
+[![Limnoria Compatible][limnoria-badge]][limnoria-link]
+<!-- README_HEADER:end -->
 
 ## Description
 
@@ -155,3 +159,19 @@ See [LICENCE.md](LICENCE.md).
 
 - In Python 3 files, do not add `# -*- coding: utf-8 -*-` unless a non-default source encoding is required.
 - Use `#!/usr/bin/env python3` only for executable scripts, not import-only modules.
+
+<!-- Badge reference definitions -->
+[tests-badge]: https://github.com/Alcheri/Geminoria/actions/workflows/tests.yml/badge.svg
+[tests-link]: https://github.com/Alcheri/Geminoria/actions/workflows/tests.yml
+
+[lint-badge]: https://github.com/Alcheri/Geminoria/actions/workflows/lint.yml/badge.svg
+[lint-link]: https://github.com/Alcheri/Geminoria/actions/workflows/lint.yml
+
+[codeql-badge]: https://github.com/Alcheri/Geminoria/actions/workflows/codeql.yml/badge.svg
+[codeql-link]: https://github.com/Alcheri/Geminoria/security/code-scanning
+
+[gemini-badge]: https://img.shields.io/badge/Powered%20by-Gemini-3D5AFE?logo=google&logoColor=FFFFFF&labelColor=00ACC1&color=5E35B1
+[gemini-link]: https://ai.google.dev/
+
+[limnoria-badge]: https://img.shields.io/badge/limnoria-compatible-brightgreen.svg
+[limnoria-link]: https://github.com/progval/Limnoria
