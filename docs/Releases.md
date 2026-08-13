@@ -63,6 +63,7 @@ This beta introduces a major architectural upgrade to Geminoria, shifting from e
 - Reworked Gemini SDK execution so a timed-out worker is replaced before later requests run.
 - Changed owner-only `gemdiag` diagnostics to send via NOTICE instead of channel reply.
 - Added compatibility fallback for mixed deployments where `plugin.py` is newer than the loaded core request-slot helper.
+- Added a user-friendly recovery hint when the configured Gemini model appears invalid, obsolete, or unavailable to the API key.
 - Added central runtime clamps for numeric settings such as tool result count, history buffer size, tool rounds, cooldown, concurrency, cache size, cache TTL, and fuzzy-cache score.
 - Added regression coverage for duplicate-channel network isolation, network-scoped request slots, timeout behaviour, and runtime numeric bounds.
 

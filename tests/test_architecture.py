@@ -13,6 +13,8 @@ from ..core.core import (
     _OUT_OF_SCOPE_REPLY,
     GeminoriaCore,
     gemversion_reply_text,
+    is_model_configuration_error,
+    model_error_reply,
 )
 from ..core.services import AsyncGeminiService
 from ..state.cache import CacheRepository, cache_key, normalize_query
@@ -54,6 +56,46 @@ class ConfigRuntimeTestCase(unittest.TestCase):
 
 
 class MemoryStoreTestCase(unittest.TestCase):
+    def test_specific_history_allowlist_overrides_general_allowlist(self):
+        store = MemoryStore()
+        cfg = RuntimeConfig(
+            history_tools_channel_allowlist=["#general"],
+            search_last_channel_allowlist=["#ops"],
+        )
+
+        self.assertTrue(
+            store.tool_enabled(
+                "search_last",
+                channel="#ops",
+                network="DALnet",
+                cfg=cfg,
+                channel_flag_getter=lambda key, channel, network: True,
+            )
+        )
+        self.assertFalse(
+            store.tool_enabled(
+                "search_last",
+                channel="#general",
+                network="DALnet",
+                cfg=cfg,
+                channel_flag_getter=lambda key, channel, network: True,
+            )
+        )
+
+    def test_channel_flag_blocks_history_tool_after_allowlist_allows_it(self):
+        store = MemoryStore()
+        cfg = RuntimeConfig(history_tools_channel_allowlist=["#ops"])
+
+        self.assertFalse(
+            store.tool_enabled(
+                "search_urls",
+                channel="#ops",
+                network="DALnet",
+                cfg=cfg,
+                channel_flag_getter=lambda key, channel, network: False,
+            )
+        )
+
     def test_history_buffers_are_isolated_by_network_and_channel(self):
         store = MemoryStore()
         url_re = re.compile(r"https?://\S+", re.IGNORECASE)
@@ -339,6 +381,26 @@ class CoreCompatibilityTestCase(unittest.TestCase):
         geminoria._release_request_slot(irc, msg)
         self.assertEqual(core.calls, [msg])
 
+    def test_plugin_applies_network_allowlists_to_runtime_config(self):
+        geminoria = plugin.Geminoria.__new__(plugin.Geminoria)
+        values = {
+            "historyToolsChannelAllowlist": ["#network"],
+            "searchLastChannelAllowlist": ["#last"],
+            "searchUrlsChannelAllowlist": ["#urls"],
+        }
+        geminoria.registryValue = lambda key, network: values[key]
+        cfg = RuntimeConfig(
+            history_tools_channel_allowlist=["#global"],
+            search_last_channel_allowlist=[],
+            search_urls_channel_allowlist=[],
+        )
+
+        geminoria._apply_network_allowlists(cfg, network="DALnet")
+
+        self.assertEqual(cfg.history_tools_channel_allowlist, ["#network"])
+        self.assertEqual(cfg.search_last_channel_allowlist, ["#last"])
+        self.assertEqual(cfg.search_urls_channel_allowlist, ["#urls"])
+
     def test_plugin_check_owner_falls_back_when_core_helper_is_missing(self):
         geminoria = plugin.Geminoria.__new__(plugin.Geminoria)
         geminoria._core = object()
@@ -474,6 +536,120 @@ class CoreCompatibilityTestCase(unittest.TestCase):
         text = gemversion_reply_text()
         self.assertIn("Geminoria version:", text)
         self.assertIn("| model:", text)
+
+    def test_model_configuration_error_detection(self):
+        self.assertTrue(
+            is_model_configuration_error(
+                ValueError(
+                    "404 models/gemini-old is not found for API version"
+                )
+            )
+        )
+        self.assertFalse(is_model_configuration_error(ValueError("quota hit")))
+
+    def test_core_returns_model_hint_for_invalid_configured_model(self):
+        class FakeService:
+            def generate_content(self, **kwargs):
+                raise ValueError(
+                    "404 models/gemini-old is not found for API version"
+                )
+
+            def close(self):
+                return None
+
+        class FakeIrc:
+            network = "DALnet"
+            callbacks = []
+
+            @staticmethod
+            def isChannel(value):
+                return bool(value and value.startswith("#"))
+
+        msg = SimpleNamespace(prefix="nick!u@h", args=["#ops", "hello"])
+
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3") as tmp:
+            core = GeminoriaCore(
+                cache_db_path=tmp.name,
+                service=FakeService(),
+                channel_flag_getter=lambda key, channel, network: True,
+            )
+            cfg = RuntimeConfig(
+                api_key="k",
+                cache_enabled=False,
+                disable_ansi=True,
+                model="gemini-old",
+                progress_indicator_enabled=False,
+            )
+            core.load_cfg = lambda: cfg
+            answer = core.handle_query(
+                FakeIrc(),
+                msg,
+                "what limnoria config controls flood protection?",
+                emit_progress=lambda: None,
+            )
+
+        self.assertEqual(answer, model_error_reply("gemini-old"))
+        self.assertIn("supybot.plugins.Geminoria.model", answer)
+
+    def test_core_returns_model_hint_for_final_synthesis_model_error(self):
+        class FakeService:
+            def __init__(self):
+                self.calls = 0
+
+            def generate_content(self, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    function_call = SimpleNamespace(
+                        name="search_config", args={"word": "flood"}
+                    )
+                    content = SimpleNamespace(
+                        parts=[SimpleNamespace(function_call=function_call)]
+                    )
+                    return SimpleNamespace(
+                        candidates=[SimpleNamespace(content=content)]
+                    )
+                raise ValueError(
+                    "400 model gemini-old is not supported for generateContent"
+                )
+
+            def close(self):
+                return None
+
+        class FakeIrc:
+            network = "DALnet"
+            callbacks = []
+
+            @staticmethod
+            def isChannel(value):
+                return bool(value and value.startswith("#"))
+
+        msg = SimpleNamespace(prefix="nick!u@h", args=["#ops", "hello"])
+        service = FakeService()
+
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3") as tmp:
+            core = GeminoriaCore(
+                cache_db_path=tmp.name,
+                service=service,
+                channel_flag_getter=lambda key, channel, network: True,
+            )
+            cfg = RuntimeConfig(
+                api_key="k",
+                cache_enabled=False,
+                disable_ansi=True,
+                max_rounds=1,
+                model="gemini-old",
+                progress_indicator_enabled=False,
+            )
+            core.load_cfg = lambda: cfg
+            answer = core.handle_query(
+                FakeIrc(),
+                msg,
+                "what limnoria config controls flood protection?",
+                emit_progress=lambda: None,
+            )
+
+        self.assertEqual(service.calls, 2)
+        self.assertEqual(answer, model_error_reply("gemini-old"))
 
     def test_core_rejects_out_of_scope_query_without_calling_service(self):
         class FakeService:

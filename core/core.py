@@ -62,11 +62,34 @@ _OUT_OF_SCOPE_REPLY = (
     "Geminoria only answers Limnoria bot questions (config, commands, "
     "capabilities, and channel history tools)."
 )
+_MODEL_ERROR_MARKERS = (
+    "does not exist",
+    "invalid",
+    "model",
+    "not found",
+    "not supported",
+    "unsupported",
+)
 
 
 def gemversion_reply_text() -> str:
     model = load_runtime_config().model
     return f"Geminoria version: {PLUGIN_VERSION} | model: {model}"
+
+
+def model_error_reply(model: str) -> str:
+    return (
+        f"Gemini model error for {model!r}. Check "
+        "supybot.plugins.Geminoria.model and set a current Gemini model "
+        "available to this API key."
+    )
+
+
+def is_model_configuration_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "model" in text and any(
+        marker in text for marker in _MODEL_ERROR_MARKERS
+    )
 
 
 def _walk_config(
@@ -449,6 +472,8 @@ class GeminoriaCore:
                 )
             except Exception as exc:
                 log.error("Geminoria: generate_content error: %s", exc)
+                if is_model_configuration_error(exc):
+                    return model_error_reply(model)
                 return f"Gemini error: {exc}"
 
             candidates = getattr(response, "candidates", None) or []
@@ -603,6 +628,8 @@ class GeminoriaCore:
             return "No answer produced."
         except Exception as exc:
             log.error("Geminoria: final synthesis error: %s", exc)
+            if is_model_configuration_error(exc):
+                return model_error_reply(model)
             if collected_tool_results:
                 fallback = " | ".join(collected_tool_results[-limit:])
                 log.warning(
